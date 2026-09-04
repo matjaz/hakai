@@ -11,10 +11,10 @@
 # friends).
 
 pkgname=hakai-git
-pkgver=0.0.1.r1.g0000000  # placeholder — pkgver() below recomputes this from git at build time
+pkgver=0.0.1.r6.g09e03fa  # placeholder — pkgver() below recomputes this from git at build time
 pkgrel=1
 pkgdesc="Smash, burn and repaint your desktop — a native Wayland/Hyprland desktop-destruction toy for Omarchy"
-arch=('x86_64' 'aarch64') # pure Rust, no arch-specific code — aarch64 confirmed on a real Omarchy/aarch64 install (makepkg's own `not available for the 'aarch64' architecture` error before this line was added)
+arch=('x86_64' 'aarch64') # pure Rust, no arch-specific code — aarch64 confirmed on a QEMU/aarch64 Omarchy install, this project's own dev/test environment throughout (see OMARCHY-PORT.md)
 url="https://github.com/matjaz/hakai"
 license=('MIT')
 # The MIT license covers the source in this repository only. Bundled fonts (SIL OFL 1.1)
