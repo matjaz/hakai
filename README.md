@@ -32,6 +32,8 @@ Plus: `Tab` / `Shift+Tab` cycles tools, `↑`/`↓` opens/closes the tool palett
 the view to a snapshot (so the *real* desktop underneath can keep changing without
 disturbing what you're smashing), `C` opens the credits panel, `R` clears everything.
 
+![Hakai mid-rampage — cracks, bullet holes, scorch marks, paint splats, stamps and termites over a desktop background, with the status bar and tool palette visible](assets/hakai.png)
+
 ## Installing
 
 Needs a real Hyprland session (Wayland, `wlr-layer-shell`) — this won't run on X11,

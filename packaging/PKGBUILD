@@ -9,7 +9,7 @@
 # friends).
 
 pkgname=hakai-git
-pkgver=0.0.1.r10.gc875fa9  # placeholder — pkgver() below recomputes this from git at build time
+pkgver=0.0.1.r17.g34ab675  # placeholder — pkgver() below recomputes this from git at build time
 pkgrel=1
 pkgdesc="Smash, burn and repaint your desktop — a native Wayland/Hyprland desktop-destruction toy for Omarchy"
 arch=('x86_64' 'aarch64') # pure Rust, no arch-specific code — aarch64 confirmed on a QEMU/aarch64 Omarchy install, this project's own dev/test environment throughout (see OMARCHY-PORT.md)
