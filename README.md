@@ -32,11 +32,43 @@ Plus: `Tab` / `Shift+Tab` cycles tools, `↑`/`↓` opens/closes the tool palett
 the view to a snapshot (so the *real* desktop underneath can keep changing without
 disturbing what you're smashing), `C` opens the credits panel, `R` clears everything.
 
-## Building and running
+## Installing
 
-Needs a real Hyprland session (Wayland, `wlr-layer-shell`) — this won't build a usable
-window on X11, GNOME, or KDE, and there's no plan to support them (see the non-goals in
-the project's own port-planning notes).
+Needs a real Hyprland session (Wayland, `wlr-layer-shell`) — this won't run on X11,
+GNOME, or KDE, and there's no plan to support them (see the non-goals in the project's
+own port-planning notes).
+
+Not yet on the AUR (registration is currently locked down repo-wide after a wave of
+malicious package uploads in mid-2026 — nothing to do with this package specifically;
+submission will follow once that reopens). Until then, install directly with `makepkg`,
+using the `PKGBUILD` already in this repo — confirmed working end to end on real
+QEMU/aarch64 Omarchy hardware:
+
+```bash
+git clone https://github.com/matjaz/hakai.git
+cd hakai/packaging
+makepkg -si
+```
+
+This builds both crates, generates the app icon procedurally (no bundled bitmap assets —
+see [Layout](#layout)), and installs the binary, `.desktop` entry, icon, license, and
+docs via `pacman`, so it's a real tracked package (`pacman -Q hakai-git`), not a stray
+binary. `pkgrel`/dependencies/install paths are all in
+[`packaging/PKGBUILD`](packaging/PKGBUILD) if you want to read exactly what it does
+before running it.
+
+If `makepkg` is invoked from a network-mounted checkout of this repo (e.g. developing
+over a shared/virtiofs mount, as this project's own dev loop does), set `BUILDDIR`
+somewhere local first — network mounts have caused real, documented build failures here
+(`PHASE0.md`, `PHASE8.md`):
+
+```bash
+BUILDDIR="$HOME/.cache/hakai-git-build" makepkg -si
+```
+
+## Building from source (development)
+
+For working on `hakai` itself, rather than installing it:
 
 ```bash
 cd hakai
@@ -92,8 +124,10 @@ to a built-in palette cleanly if that's not available — read once at startup, 
 ## Status
 
 Core development (rendering, input, audio, screen capture, fractional scaling, Omarchy
-theming) is done and confirmed working on real Hyprland hardware. Packaging (`PKGBUILD`,
-CI, AUR submission) is in progress — see `PHASE8.md`.
+theming) is done and confirmed working on real Hyprland hardware. Packaging is mostly
+done — `PKGBUILD`, CI, and a real `makepkg -si` install are all confirmed working — with
+AUR submission itself on hold until the AUR's own registration lockdown lifts (see
+[Installing](#installing)). See `PHASE8.md` for the full packaging writeup.
 
 ## License
 
