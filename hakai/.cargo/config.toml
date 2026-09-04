@@ -1,0 +1,6 @@
+# Build artifacts go to local disk, not the /mnt/mac shared mount this project's source
+# lives on. Cargo's incremental compilation and crate metadata rely on precise mtimes and
+# atomic renames that network/shared filesystems don't reliably provide — building `target/`
+# in place on the mount is what produced the "invalid metadata files for crate `ash`" error.
+[build]
+target-dir = "/home/matjaz/.cache/hakai-target"

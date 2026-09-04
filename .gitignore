@@ -1,0 +1,12 @@
+# Cargo build artifacts — both crates redirect `target-dir` off this shared mount (see
+# each crate's own .cargo/config.toml) onto local disk on whatever machine builds them,
+# but ignore the in-place default too in case that ever changes.
+target/
+
+# macOS Finder noise.
+.DS_Store
+.Trash-1000/
+
+# Editor swap/backup files.
+*.swp
+*~

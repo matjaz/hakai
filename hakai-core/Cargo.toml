@@ -1,0 +1,23 @@
+[package]
+name = "hakai-core"
+version = "0.0.1"
+edition = "2021"
+description = "Phase 1: headless raster core — SplitMix64, the tiled damage layer, procedural decals. No window, no audio, no compositor — builds and tests on any OS."
+
+[lib]
+name = "hakai_core"
+path = "src/lib.rs"
+
+[dependencies]
+# If cargo can't resolve this (a breaking 0.12+ is out and old 0.11.x got yanked, which
+# is unlikely but not impossible), relax to "0.12" or whatever `cargo add tiny-skia`
+# resolves to — nothing in this crate depends on 0.11-specific behaviour.
+tiny-skia = "0.11"
+# Glyph outline extraction for the stamp decal's text — see src/fonts.rs. Only its
+# `OutlineBuilder` trait and `Face::parse`/`glyph_index`/`outline_glyph` are used, which
+# have been stable across ttf-parser's whole 0.2x line, so a version bump here shouldn't
+# need code changes.
+ttf-parser = "0.24"
+# Parses the bundled `assets/manifest.json` for the credits panel — see src/credits.rs.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

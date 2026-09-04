@@ -1,0 +1,4 @@
+# Same fix as ../hakai/.cargo/config.toml: build artifacts go to local disk, not the
+# /mnt/mac shared mount this crate's source lives on. See that file's comment for why.
+[build]
+target-dir = "/home/matjaz/.cache/hakai-core-target"
