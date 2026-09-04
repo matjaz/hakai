@@ -10,3 +10,12 @@ target/
 # Editor swap/backup files.
 *.swp
 *~
+
+# makepkg's own build artifacts: packaging/hakai-git/ is its bare-repo VCS source cache
+# (named after the package), packaging/src/ is the working clone built from it,
+# packaging/pkg/ is the staged install tree. Real output belongs in a release, not here.
+packaging/hakai-git/
+packaging/src/
+packaging/pkg/
+packaging/*.pkg.tar.*
+packaging/*.log
