@@ -19,3 +19,8 @@ packaging/src/
 packaging/pkg/
 packaging/*.pkg.tar.*
 packaging/*.log
+
+# .SRCINFO is generated from PKGBUILD right before each AUR push (`makepkg
+# --printsrcinfo`), into the *separate* AUR git repo, not this one — committing a copy
+# here would just go stale the moment PKGBUILD changes without anyone regenerating it.
+packaging/.SRCINFO
