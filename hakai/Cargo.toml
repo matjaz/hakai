@@ -11,6 +11,15 @@ readme = "../README.md"
 name = "hakai"
 path = "src/main.rs"
 
+[profile.release]
+# Strips debug symbols (and the source-file paths baked into them — panic locations,
+# debuginfo — which is what a real `makepkg` build flagged: "WARNING: Package contains
+# reference to $srcdir" in the compiled binary, since Rust otherwise embeds the literal
+# absolute build-directory path). A warning, not a build failure, but a real packaging
+# quality issue worth fixing rather than living with — this also shrinks the shipped
+# binary, a genuine win, not just a cosmetic one.
+strip = true
+
 [dependencies]
 # The whole headless core (Phases 1–3: damage layer, decals, icons, sprites, tools,
 # termite colony, simulation) — a plain relative path dependency to the sibling crate

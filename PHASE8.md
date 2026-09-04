@@ -396,6 +396,32 @@ Should now install the cracked-monitor icon, not the hammer, to
 
 ---
 
-Still open for Phase 8: visually confirming the new app icon (both the raw PNG and in a
-real app launcher), a headless compositor smoke-test setup for CI (deferred, see chunk 5),
-and the actual AUR submission.
+# Phase 8 — chunk 7: stripping the release binary
+
+Found on a real `makepkg -si` run: `==> WARNING: Package contains reference to $srcdir` —
+`usr/bin/hakai`. A warning, not a build failure (packaging still completed), but real:
+Rust bakes the literal absolute source-file paths used at compile time into a release
+binary's debug info and panic-location strings by default, so the compiled `hakai`
+contained the actual build directory path (`$BUILDDIR/src/...`) — meaningless, and
+slightly leaky, once packaged and installed somewhere else entirely.
+
+Fixed with `[profile.release] strip = true` in `hakai/Cargo.toml` — the standard,
+Cargo-native way to strip debug symbols (which is where those embedded paths live) from a
+release build. A genuine two-for-one: also shrinks the shipped binary, not just quiets the
+warning.
+
+## What "done" looks like
+
+- [ ] A real `makepkg -si` run no longer warns about `$srcdir` in the packaged binary
+- [ ] `hakai` still runs correctly after stripping (stripping removes debug info, not
+      functionality, but worth confirming on a real run rather than assumed)
+
+Not yet build-tested — first run since adding the profile setting.
+
+---
+
+Still open for Phase 8: confirming the launcher shows "Hakai" correctly after the
+`GenericName` fix, confirming the stripped binary builds clean and still runs, a headless
+compositor smoke-test setup for CI (deferred, see chunk 5), and the actual AUR submission
+(blocked externally — AUR registration is currently locked down after mid-2026's
+malicious-package wave, unrelated to this project).
