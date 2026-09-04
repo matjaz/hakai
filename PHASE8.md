@@ -162,19 +162,84 @@ cd packaging && makepkg -si
 
 - [x] `LICENSE` exists, matches the chosen license, and both `Cargo.toml`s declare it
 - [x] `PKGBUILD`'s `url=`/`source=` point at the real repo
-- [x] The repo is pushed to `https://github.com/matjaz/hakai`
-- [ ] The repo is public (currently private — `makepkg`'s anonymous HTTPS fetch needs
-      public read access)
-- [ ] `PKGBUILD` builds cleanly with `makepkg` against the pushed repo
-- [ ] The installed binary runs, the `.desktop` entry appears in an app launcher with a
-      real (if placeholder) icon, and `/usr/share/doc/hakai-git/` has the credits and the
-      keybind snippet
-- [ ] `makepkg`'s build never touches `~/.cache/hakai-target`/`~/.cache/hakai-core-target`
-      (confirms the `CARGO_TARGET_DIR` override actually works, not just reads correctly)
+- [x] The repo is pushed to `https://github.com/matjaz/hakai` and public
+- [x] `PKGBUILD` builds and installs cleanly with `makepkg -si`
+- [x] The installed binary runs (`pacman -Q hakai-git`, `which hakai`, `hakai` all
+      confirmed on real QEMU/aarch64 Omarchy hardware)
+- [ ] The `.desktop` entry's icon actually shows correctly in an app launcher (a pacman
+      hook failed regenerating the icon cache — see below; not yet re-verified since)
 
 ---
 
-Still open for Phase 8: making the repo public (needed before `makepkg`'s anonymous fetch
-or an AUR builder can reach it), a real `makepkg` run against it, CI (`cargo test` for both
-crates, `gen_credits --check`, plus a headless-Hyprland smoke run), a dedicated
-(non-cursor) app icon, and the actual AUR submission.
+# Phase 8 — chunk 3: the real `makepkg` run — three real bugs, one non-bug
+
+Goal: actually run `makepkg -si` end to end against the pushed repo, not just review the
+`PKGBUILD` by reading it. Found three real, worth-fixing bugs and one environment quirk
+that looked alarming but wasn't — recorded here in the order they surfaced, since each
+one only became visible after the previous one was fixed.
+
+**1. `arch=('x86_64')` — missing `aarch64`.** First error, immediately:
+`hakai-git is not available for the 'aarch64' architecture`. This project's own dev/test
+box is QEMU/aarch64 (confirmed directly, not assumed), and neither crate has any
+architecture-specific code — pure Rust throughout. Added `aarch64` to `arch=()`.
+
+**2. `CARGO_TARGET_DIR="$srcdir/target"` — still on the network mount.** Next error:
+`invalid metadata files for crate regex_automata` — the *exact* bug `PHASE0.md` already
+documents (a `/mnt`-mounted source directory corrupts cargo's own crate metadata), just a
+different crate name than the original `ash` instance. The irony: this override existed
+specifically to avoid picking up each crate's own `.cargo/config.toml` (which redirects
+`target-dir` to a hardcoded `/home/matjaz/.cache/...` path — wrong for a package build,
+since it assumes one specific user), but pointing it at `$srcdir/target` put it right back
+on the same mount when `makepkg` itself runs from a mounted `packaging/` directory —
+`$srcdir` is `$BUILDDIR/src`, and `$BUILDDIR` defaults to wherever the `PKGBUILD` lives.
+Fixed: `CARGO_TARGET_DIR="$HOME/.cache/hakai-git-build-target"` — `$HOME`, not a hardcoded
+username, and a real property (off *any* mount, not just "not `$srcdir`") rather than a
+coincidence.
+
+**3. `fakeroot`/`chmod` permission denied on `$pkgdir` — a test-environment quirk, not a
+`PKGBUILD` bug.** Next error, once the build itself succeeded: `package()`'s `fakeroot`
+step failed with `chmod: changing permissions of '.../packaging/pkg': Permission denied`.
+Same underlying cause as bug 2 (the network mount doesn't support real chmod/chown
+semantics) but a different symptom, and — importantly — **not something to fix in the
+`PKGBUILD` itself**: a real `yay -S hakai-git` install builds entirely inside the AUR
+helper's own local cache directory (e.g. `~/.cache/yay/hakai-git/`), never touching this
+mount at all, so no real end user would ever hit this. It's purely an artifact of testing
+`makepkg` directly from this repo's own mounted dev checkout. Worked around for testing
+only, via `makepkg`'s own `BUILDDIR` env var (relocates `src`/`pkg` off the mount
+entirely): `BUILDDIR="$HOME/.cache/hakai-git-build" makepkg -si`.
+
+**4. Default log level too verbose for a real launch — a real bug, found on the actual
+installed binary.** Once installed and run directly (not via `RUST_LOG=info cargo run`,
+which is how every single build/test instruction during this project's own development
+invoked it), `hakai` printed a wall of `info`-level diagnostic noise ("uploaded N
+textures", "HUD panel built", etc.) — exactly the output that was genuinely useful while
+building this port, but wrong as a *default* for a normal user launching a packaged app
+from a keybind or launcher. Fixed in `hakai/src/main.rs`: the fallback when `RUST_LOG`
+isn't set at all is now `warn`, not `info`. `RUST_LOG=info`/`RUST_LOG=debug` still work
+exactly as before for anyone who wants that output back.
+
+**Also found, likely benign, not chased further:** `gtk-update-icon-cache: The generated
+cache was invalid` from a pacman hook during install. This is standard system machinery
+(triggered by any package touching `/usr/share/icons/hicolor/`, not anything in this
+package's own `PKGBUILD`) and a known, often-harmless quirk in VM/container environments.
+The package itself installed and ran correctly regardless — worth a second look only if
+the `.desktop` entry's icon actually fails to show up in a real app launcher, not chased
+purely on the hook's own error text.
+
+## What "done" looks like (chunk 3)
+
+- [x] `arch=()` includes `aarch64`
+- [x] `CARGO_TARGET_DIR` no longer resolves onto a network mount
+- [x] A full `makepkg -si` run succeeds, package installs, `hakai` runs
+- [x] Default log level is quiet (`warn`) for a normal launch
+- [ ] The `.desktop` entry's icon renders correctly in a real app launcher (pending
+      re-verification after the icon-cache hook failure above)
+- [ ] `Super Shift H` / `Super Shift Alt H` verified live — needs adding to
+      `~/.config/hypr/bindings.conf` by hand first (not applied automatically, see the
+      keybind section of `README.md`), then `hyprctl reload`
+
+---
+
+Still open for Phase 8: verifying the app launcher icon and the Hyprland keybind live, CI
+(`cargo test` for both crates, `gen_credits --check`, plus a headless-Hyprland smoke run),
+a dedicated (non-cursor) app icon, and the actual AUR submission.

@@ -88,6 +88,14 @@ mod theme;
 use text::TextRenderer;
 
 fn main() {
+    // Defaults to `warn` when `RUST_LOG` isn't set at all — quiet for a normal launch
+    // (from a keybind, an app launcher, or a packaged install), since every build/test
+    // instruction during this project's own development explicitly set `RUST_LOG=info`
+    // itself; a real end user never would, and got a wall of "uploaded N textures"/"HUD
+    // panel built"-style diagnostic noise as a result (caught from an actual packaged
+    // run, not assumed). `RUST_LOG=info`/`RUST_LOG=debug` still work exactly as before for
+    // anyone who wants that output back.
+    //
     // Plain `env_logger::init()` would let `wgpu_core`/`wgpu_hal`'s own `info`-level
     // internals (e.g. "Device::maintain: waiting for submission index N", logged on
     // essentially every frame) drown out this app's own logging at `RUST_LOG=info`.
@@ -97,7 +105,7 @@ fn main() {
     // this app's own output without silencing genuine `wgpu` warnings/errors. The
     // tradeoff: debugging `wgpu` itself now needs editing this line, not just the
     // environment variable.
-    let base_filter = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
+    let base_filter = std::env::var("RUST_LOG").unwrap_or_else(|_| "warn".to_string());
     env_logger::Builder::new().parse_filters(&format!("{base_filter},wgpu_core=warn,wgpu_hal=warn,naga=warn")).init();
 
     let conn = Connection::connect_to_env().expect(
