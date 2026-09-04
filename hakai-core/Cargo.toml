@@ -2,7 +2,9 @@
 name = "hakai-core"
 version = "0.0.1"
 edition = "2021"
-description = "Phase 1: headless raster core — SplitMix64, the tiled damage layer, procedural decals. No window, no audio, no compositor — builds and tests on any OS."
+description = "hakai's headless raster/game-logic core — SplitMix64, the tiled damage layer, procedural decals/icons/sprites, all nine tools, the termite colony. No window, no audio, no compositor — builds and tests on any OS."
+license = "MIT"
+repository = "https://github.com/TODO/hakai" # placeholder — no public remote yet, see PHASE8.md
 
 [lib]
 name = "hakai_core"

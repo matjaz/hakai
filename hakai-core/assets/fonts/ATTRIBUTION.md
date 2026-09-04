@@ -10,6 +10,8 @@
   macOS build's `NSFont.systemFont(weight: .black)`. A heavy, condensed sans matches the
   original's rubber-stamp lettering better than a system UI font would anyway.
 
-Regenerate the credits/licence-gate check the macOS build has (`tools/gen_credits.py`,
-`make verify-licenses`) once Phase 8 packaging starts — this file is a placeholder for that
-mechanism, not a replacement for it.
+This entry is transcribed into `../../examples/gen_credits.rs`'s `FONTS` table, which
+regenerates the repo-root `CREDITS.md` — the actual credits/licence-gate mechanism the
+macOS build has as `tools/gen_credits.py`/`make verify-licenses`, ported to Rust for Phase
+8. Keep the two in sync by hand if this file ever changes; there are only ever two font
+families to update.

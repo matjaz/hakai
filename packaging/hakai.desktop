@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Hakai
+GenericName=Desktop Destroyer
+Comment=Smash, burn and repaint your desktop
+Exec=hakai
+Icon=hakai
+Terminal=false
+Categories=Game;
+StartupNotify=false

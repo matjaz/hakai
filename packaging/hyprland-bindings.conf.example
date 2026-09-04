@@ -1,0 +1,14 @@
+# hakai — suggested Hyprland keybinds.
+#
+# Not applied automatically by the package (editing a user's own dotfiles from a package
+# install is the kind of thing that should never happen silently) — copy whatever you want
+# into your own ~/.config/hypr/bindings.conf instead.
+#
+# SUPER SHIFT H is what this project itself uses — chosen after SUPER SHIFT D, Omarchy's
+# own default keybind (matching its usual "SUPER SHIFT + first letter" app-launcher
+# pattern) turned out to already be bound to LazyDocker on a real Omarchy install. Check
+# `Super K` (Omarchy's own live keybindings reference) before relying on H being free on
+# your own machine too, since Omarchy's default bindings have changed across its major
+# versions.
+bindd = SUPER SHIFT, H, Destroy the desktop, exec, uwsm app -- hakai
+bindd = SUPER SHIFT ALT, H, Stop destroying it, exec, pkill -x hakai

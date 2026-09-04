@@ -1,0 +1,84 @@
+# Maintainer: Matjaz Lipus <matjazl@gmail.com>
+#
+# DRAFT — not yet submitted to the AUR. `url`/`source` below are placeholders (see the
+# TODO markers) until this repo has a public git remote; everything else (dependencies,
+# build/package steps, installed files) is written and reviewable now. See
+# `OMARCHY-PORT.md`'s Phase 8 writeup and `PHASE8.md` (repo root) for the full context.
+#
+# `-git`, not a release-tag package: there's no tagged release yet, and this project is
+# still under active development — a VCS package is the right shape until that changes,
+# same as most actively-developed Hyprland-ecosystem AUR packages (hyprland-git and
+# friends).
+
+pkgname=hakai-git
+pkgver=0.0.1.r1.g0000000  # placeholder — pkgver() below recomputes this from git at build time
+pkgrel=1
+pkgdesc="Smash, burn and repaint your desktop — a native Wayland/Hyprland desktop-destruction toy for Omarchy"
+arch=('x86_64') # aarch64 is architecturally plausible (no x86-specific code) but not yet verified on real hardware — add once it is
+url="https://github.com/TODO/hakai" # TODO: fill in once this repo has a public remote
+license=('MIT')
+# The MIT license covers the source in this repository only. Bundled fonts (SIL OFL 1.1)
+# and sounds (a mix of CC BY 4.0 / CC0 / Public Domain) are separately licensed — see
+# CREDITS.md, installed below, for the full per-file breakdown. Nothing about that mix
+# affects this package's own license= field, which describes hakai's own code.
+depends=(
+  'wayland'          # wayland-client's `client_system` feature dlopens libwayland-client.so
+  'libxkbcommon'      # keyboard layout handling, via smithay-client-toolkit
+  'vulkan-icd-loader' # wgpu's Vulkan backend — an actual driver (mesa-vulkan-*, matching your GPU) also has to be installed, but which one is hardware-specific, not something this package can pin
+  'alsa-lib'          # cpal's Linux backend links against libasound; Omarchy's own PipeWire + pipewire-alsa already routes this through PipeWire, so no direct PipeWire dependency is needed here
+  'hyprland'          # this is a wlr-layer-shell overlay relying on Hyprland-specific exclusive-keyboard-grab behavior — see OMARCHY-PORT.md's explicit non-goals (other compositors are out of scope)
+)
+optdepends=(
+  'omarchy: theme-aware paint palette and HUD colours (falls back to a built-in palette cleanly without it — see hakai/PHASE7.md)'
+)
+makedepends=('cargo' 'git')
+provides=('hakai')
+conflicts=('hakai')
+source=("$pkgname::git+$url.git")
+sha256sums=('SKIP') # VCS source — nothing to checksum ahead of time; standard for -git packages
+
+pkgver() {
+  cd "$srcdir/$pkgname"
+  local base
+  base=$(grep -m1 '^version' hakai/Cargo.toml | cut -d'"' -f2)
+  printf "%s.r%s.g%s" "$base" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+build() {
+  cd "$srcdir/$pkgname"
+
+  # Both crates' own `.cargo/config.toml` redirect `target-dir` to a fixed path under
+  # `~/.cache/` — a dev-machine-specific workaround for building on a network-mounted
+  # source directory (see PHASE0.md), not something a package build should ever pick up:
+  # it assumes a specific user's home directory and would leak build artifacts outside
+  # makepkg's own sandboxed `$srcdir`. `CARGO_TARGET_DIR` (an env var) overrides a
+  # `.cargo/config.toml`'s `target-dir` per Cargo's own precedence rules, so this sidesteps
+  # it cleanly without having to modify or strip that file from the packaged source.
+  export CARGO_TARGET_DIR="$srcdir/target"
+  export RUSTUP_TOOLCHAIN=stable
+
+  cargo build --release --manifest-path hakai/Cargo.toml --locked
+
+  # This project's own explicit non-goal is bundled bitmap assets — every icon it ships is
+  # generated procedurally, the same way the in-app cursor icons are (see
+  # `hakai-core/examples/dump_icons.rs`, already used for visual review during
+  # development). Reuses the hammer tool icon — the single most recognizable piece of this
+  # toy — as the desktop icon here, rather than inventing a separate square app-icon
+  # generator. A dedicated app icon (as opposed to a repurposed cursor icon) is open
+  # follow-up work, not forgotten — flagged rather than silently shipped as final.
+  cargo run --release --manifest-path hakai-core/Cargo.toml --example dump_icons -- "$srcdir/icons"
+}
+
+package() {
+  cd "$srcdir/$pkgname"
+
+  install -Dm755 "$CARGO_TARGET_DIR/release/hakai" "$pkgdir/usr/bin/hakai"
+
+  install -Dm644 "$srcdir/icons/icon-1-hammer.png" "$pkgdir/usr/share/pixmaps/hakai.png"
+  install -Dm644 "$srcdir/icons/icon-1-hammer.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/hakai.png"
+
+  install -Dm644 packaging/hakai.desktop "$pkgdir/usr/share/applications/hakai.desktop"
+  install -Dm644 packaging/hyprland-bindings.conf.example "$pkgdir/usr/share/doc/$pkgname/hyprland-bindings.conf.example"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 CREDITS.md "$pkgdir/usr/share/doc/$pkgname/CREDITS.md"
+}
