@@ -380,13 +380,16 @@ Should now install the cracked-monitor icon, not the hammer, to
 
 ## What "done" looks like
 
-- [ ] `hakai-core` builds and tests clean, including the two new `app_icon` tests
+- [x] `hakai-core` builds and tests clean, including the two new `app_icon` tests —
+      confirmed via CI (`hakai-core` job, run
+      [`33911107337`](https://github.com/matjaz/hakai/actions/runs/33911107337)), not just
+      written
 - [ ] `target/dump/app.png` actually looks right — a legible cracked monitor, distinct
-      from a tool icon, reads at both 256px and scaled down to launcher size
+      from a tool icon, reads at both 256px and scaled down to launcher size — **not yet
+      visually reviewed by anyone**, CI only confirms it's non-blank and reproducible, not
+      that it looks good
 - [ ] A real `makepkg -si` installs it and it shows up correctly in an app launcher
       (closing the still-open item from chunk 3's icon-cache hook hiccup, too)
-
-Not yet build-tested or visually reviewed — this is the first run since writing it.
 
 ---
 
