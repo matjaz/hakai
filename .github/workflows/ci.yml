@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # hakai-core is deliberately headless (see its own crate doc comment) — no Wayland, no
+  # audio, no compositor, so this runs on a plain Ubuntu runner with nothing extra
+  # installed. High confidence this job is right: it's the same `cargo test` / `cargo run
+  # --example` invocations already used throughout local development.
+  hakai-core:
+    name: hakai-core (headless — test + gen_credits --check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: hakai-core
+
+      - name: cargo test
+        run: cargo test --manifest-path hakai-core/Cargo.toml --locked
+
+      - name: CREDITS.md is in sync with its sources
+        # No explicit path needed — gen_credits defaults to ../CREDITS.md relative to
+        # CARGO_MANIFEST_DIR (hakai-core/), which cargo sets from --manifest-path
+        # regardless of the invocation's own working directory.
+        run: cargo run --manifest-path hakai-core/Cargo.toml --example gen_credits --locked -- --check
+
+  # hakai (the binary) needs real Wayland/ALSA/Vulkan dev headers to compile at all —
+  # smithay-client-toolkit/wayland-backend/cpal all link against or probe for them via
+  # build.rs, even though the actual libraries are dlopen'd at runtime, not link-time.
+  # Build-only: there's no real compositor in CI, so this can't run `hakai` itself, only
+  # confirm it compiles — the "headless-Hyprland smoke run" mentioned in OMARCHY-PORT.md's
+  # Phase 8 exit criterion is real, harder problem (a nested/virtual compositor actually
+  # accepting hakai's layer-shell surface) genuinely deferred, not attempted here: it needs
+  # to be worked out and verified against a real setup before it's worth scripting into CI,
+  # not guessed at blind.
+  hakai-build:
+    name: hakai (binary — build only, no compositor in CI)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: hakai
+
+      - name: Install Wayland/xkbcommon/ALSA/Vulkan dev headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwayland-dev libxkbcommon-dev libasound2-dev libvulkan-dev pkg-config
+
+      - name: cargo build --release
+        run: cargo build --release --manifest-path hakai/Cargo.toml --locked

@@ -278,6 +278,48 @@ updated to match.
 
 ---
 
-Still open for Phase 8: verifying the app launcher icon shows up correctly, CI (`cargo
-test` for both crates, `gen_credits --check`, plus a headless-Hyprland smoke run), a
-dedicated (non-cursor) app icon, and the actual AUR submission.
+# Phase 8 — chunk 5: CI
+
+Goal: a GitHub Actions workflow (`.github/workflows/ci.yml`) — the one piece of Phase 8
+that runs on GitHub's own infrastructure rather than needing the user's Omarchy box, so
+it can actually be verified directly rather than handed off.
+
+Two jobs, deliberately scoped differently by confidence:
+
+**`hakai-core`** — high confidence. This crate is headless by design (no Wayland, no
+audio, no compositor — see its own crate doc comment), so it runs on a bare
+`ubuntu-latest` runner with nothing extra installed: the same `cargo test` /
+`cargo run --example gen_credits -- --check` invocations already used throughout local
+development, unchanged.
+
+**`hakai-build`** — build-only, lower confidence, honestly scoped. `hakai` needs real
+Wayland/xkbcommon/ALSA/Vulkan dev headers to *compile* at all (`smithay-client-toolkit`/
+`wayland-backend`/`cpal` all link against or probe for them via their own `build.rs`, even
+though the actual libraries are `dlopen`'d at runtime, not link-time) — installed via
+`apt-get`. This only confirms the binary *compiles*, since there's no real compositor for
+it to run against in CI.
+
+**Explicitly not attempted: the "headless-Hyprland smoke run" from `OMARCHY-PORT.md`'s own
+Phase 8 exit criterion.** That's a genuinely harder problem — a nested or virtual
+compositor actually accepting `hakai`'s `wlr-layer-shell` surface, not just a `cargo
+build` — and guessing at a CI setup for it without being able to test it directly would be
+exactly the kind of unverified risk this project has consistently avoided elsewhere.
+Flagged as real, deferred work, not silently dropped from scope.
+
+## Verified how
+
+Unlike every other Phase 8 chunk, this one runs on GitHub's own infrastructure — pushed,
+then checked directly via `gh run list`/`gh run view` rather than handed to the user's
+Omarchy box, since there's nothing Omarchy-specific about compiling.
+
+## What "done" looks like
+
+- [ ] `hakai-core`'s job passes (test + `gen_credits --check`)
+- [ ] `hakai-build`'s job passes (`cargo build --release`, dev headers installed)
+- [ ] Neither job was guessed at without being able to see its actual result
+
+---
+
+Still open for Phase 8: verifying the app launcher icon shows up correctly, a headless
+compositor smoke-test setup for CI (deferred, see chunk 5 above), a dedicated (non-cursor)
+app icon, and the actual AUR submission.
