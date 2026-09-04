@@ -309,14 +309,16 @@ Flagged as real, deferred work, not silently dropped from scope.
 ## Verified how
 
 Unlike every other Phase 8 chunk, this one runs on GitHub's own infrastructure — pushed,
-then checked directly via `gh run list`/`gh run view` rather than handed to the user's
-Omarchy box, since there's nothing Omarchy-specific about compiling.
+then checked directly via `gh run watch` rather than handed to the user's Omarchy box,
+since there's nothing Omarchy-specific about compiling. **Confirmed**: both jobs passed on
+the very first real run (`hakai-core` in 44s, `hakai-build` in 1m59s), no fixes needed —
+run [`33910482064`](https://github.com/matjaz/hakai/actions/runs/33910482064).
 
 ## What "done" looks like
 
-- [ ] `hakai-core`'s job passes (test + `gen_credits --check`)
-- [ ] `hakai-build`'s job passes (`cargo build --release`, dev headers installed)
-- [ ] Neither job was guessed at without being able to see its actual result
+- [x] `hakai-core`'s job passes (test + `gen_credits --check`)
+- [x] `hakai-build`'s job passes (`cargo build --release`, dev headers installed)
+- [x] Neither job was guessed at — both verified against a real run's actual result
 
 ---
 
