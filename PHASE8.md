@@ -218,13 +218,17 @@ from a keybind or launcher. Fixed in `hakai/src/main.rs`: the fallback when `RUS
 isn't set at all is now `warn`, not `info`. `RUST_LOG=info`/`RUST_LOG=debug` still work
 exactly as before for anyone who wants that output back.
 
-**Also found, likely benign, not chased further:** `gtk-update-icon-cache: The generated
-cache was invalid` from a pacman hook during install. This is standard system machinery
-(triggered by any package touching `/usr/share/icons/hicolor/`, not anything in this
-package's own `PKGBUILD`) and a known, often-harmless quirk in VM/container environments.
-The package itself installed and ran correctly regardless — worth a second look only if
-the `.desktop` entry's icon actually fails to show up in a real app launcher, not chased
-purely on the hook's own error text.
+**Also found, and actually run to ground: `gtk-update-icon-cache: The generated cache was
+invalid`, from a pacman hook, on every single install.** Recurring on every run was enough
+to stop calling it "likely benign" and actually verify it — checked `hakai.png` itself
+(confirmed 256×256 PNG, valid, matching `256x256/apps/` exactly), then ran
+`gtk-update-icon-cache -f -v /usr/share/icons/hicolor` by hand: succeeded silently, no
+error, cache now valid. That rules out anything wrong with this package's own icon or
+`PKGBUILD` — the hook specifically fails *during* a live pacman transaction on this
+environment (the same class of QEMU/virtiofs quirk as the earlier `/mnt`-mount build
+issues elsewhere in this project) but the identical command run standalone afterward
+works fine and leaves a correct cache behind. Not something this package's `PKGBUILD` can
+fix or should try to — closed, not deferred.
 
 ## What "done" looks like (chunk 3)
 
