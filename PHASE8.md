@@ -384,12 +384,15 @@ Should now install the cracked-monitor icon, not the hammer, to
       confirmed via CI (`hakai-core` job, run
       [`33911107337`](https://github.com/matjaz/hakai/actions/runs/33911107337)), not just
       written
-- [ ] `target/dump/app.png` actually looks right — a legible cracked monitor, distinct
-      from a tool icon, reads at both 256px and scaled down to launcher size — **not yet
-      visually reviewed by anyone**, CI only confirms it's non-blank and reproducible, not
-      that it looks good
-- [ ] A real `makepkg -si` installs it and it shows up correctly in an app launcher
-      (closing the still-open item from chunk 3's icon-cache hook hiccup, too)
+- [x] `target/dump/app.png` actually looks right — confirmed by the user ("app icon is
+      ok")
+- [x] `hakai` not appearing in the launcher at all turned out to be a stale
+      `update-desktop-database` cache (the same class of issue as chunk 3's
+      `gtk-update-icon-cache` hiccup) — a manual refresh surfaced the entry
+- [ ] The entry showed up labelled "Destroyer", not "Hakai" — `GenericName=Desktop
+      Destroyer` in `packaging/hakai.desktop` competing with `Name=Hakai` in whatever
+      launcher this is. Dropped `GenericName` entirely (optional field, not worth the
+      ambiguity) — not yet re-verified after the fix.
 
 ---
 
