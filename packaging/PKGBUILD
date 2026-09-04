@@ -66,12 +66,11 @@ build() {
   cargo build --release --manifest-path hakai/Cargo.toml --locked
 
   # This project's own explicit non-goal is bundled bitmap assets — every icon it ships is
-  # generated procedurally, the same way the in-app cursor icons are (see
-  # `hakai-core/examples/dump_icons.rs`, already used for visual review during
-  # development). Reuses the hammer tool icon — the single most recognizable piece of this
-  # toy — as the desktop icon here, rather than inventing a separate square app-icon
-  # generator. A dedicated app icon (as opposed to a repurposed cursor icon) is open
-  # follow-up work, not forgotten — flagged rather than silently shipped as final.
+  # generated procedurally at build time instead, via the existing
+  # `hakai-core/examples/dump_icons.rs` (already used for visual review during
+  # development). `icons::ToolIcons::app_icon` — a dedicated, centred/symmetric icon (a
+  # cracked monitor), not a repurposed cursor icon — is the one this actually installs
+  # below.
   cargo run --release --manifest-path hakai-core/Cargo.toml --example dump_icons -- "$srcdir/icons"
 }
 
@@ -80,8 +79,8 @@ package() {
 
   install -Dm755 "$CARGO_TARGET_DIR/release/hakai" "$pkgdir/usr/bin/hakai"
 
-  install -Dm644 "$srcdir/icons/icon-1-hammer.png" "$pkgdir/usr/share/pixmaps/hakai.png"
-  install -Dm644 "$srcdir/icons/icon-1-hammer.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/hakai.png"
+  install -Dm644 "$srcdir/icons/app.png" "$pkgdir/usr/share/pixmaps/hakai.png"
+  install -Dm644 "$srcdir/icons/app.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/hakai.png"
 
   install -Dm644 packaging/hakai.desktop "$pkgdir/usr/share/applications/hakai.desktop"
   install -Dm644 packaging/hyprland-bindings.conf.example "$pkgdir/usr/share/doc/$pkgname/hyprland-bindings.conf.example"

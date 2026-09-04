@@ -211,6 +211,13 @@ impl IconBuilder {
             point_size: (point_size, point_size),
         }
     }
+
+    /// For icons with no hotspot/pivot/point-size concept at all — right now, just the
+    /// application's own icon (see `make_app_icon`), which is drawn centred and
+    /// symmetric rather than positioned next to a cursor.
+    pub fn finish_pixmap(self) -> Pixmap {
+        self.pixmap
+    }
 }
 
 // MARK: - ToolIcons
@@ -254,6 +261,15 @@ impl ToolIcons {
     }
     pub fn washer(&mut self) -> &ToolIcon {
         self.cached("washer", || make_washer(256))
+    }
+
+    /// The application's own icon — see `make_app_icon`'s doc comment for why this
+    /// doesn't go through `cached`/return `&ToolIcon` like every tool icon above: it's
+    /// called exactly once, by `dump_icons`, not from any per-frame renderer path, so
+    /// there's nothing worth caching, and it has no hotspot/pivot for a `ToolIcon` to
+    /// carry in the first place.
+    pub fn app_icon(&self) -> Pixmap {
+        make_app_icon(256)
     }
 
     /// The icon for a given tool in its resting state. `id` matches `ToolID`'s
@@ -775,6 +791,68 @@ fn make_washer(px: u32) -> ToolIcon {
     b.finish((40.0, 188.0), None, 128.0)
 }
 
+/// The application's own icon (`.desktop` entry, hicolor theme) — genuinely new to this
+/// port, not a translation of anything in the Swift original, which had no equivalent (a
+/// Linux `.desktop` entry needs an icon file the macOS `.app` bundle never did). No
+/// hotspot/pivot semantics apply, unlike every tool icon above — drawn centred and
+/// symmetric instead, since it's read at launcher sizes next to other apps' icons, not
+/// positioned next to a cursor. A cracked monitor: reads as "desktop destruction" on its
+/// own, distinct from any single tool — replacing this port's earlier placeholder (the
+/// hammer's own cursor icon, repurposed, which was designed for the opposite job).
+pub fn make_app_icon(px: u32) -> Pixmap {
+    let mut b = IconBuilder::new(px);
+
+    // The stand, drawn first so the monitor sits visually in front of it.
+    let p = b.round_rect(112.0, 26.0, 32.0, 14.0, 6.0);
+    b.fill(&p, palette::steel_dark(), true);
+    let p = b.round_rect(122.0, 40.0, 12.0, 30.0, 4.0);
+    b.fill(&p, palette::steel_dark(), true);
+
+    // The monitor bezel.
+    let p = b.round_rect(30.0, 68.0, 196.0, 138.0, 14.0);
+    b.fill(&p, palette::plastic_dark(), true);
+
+    // The screen — a dark "glass", inset from the bezel. Not part of the outer
+    // silhouette (`in_silhouette: false`): the crack and the impact spark below need to
+    // sit visually *inside* the bezel's own outline, not add a second one of their own.
+    let p = b.round_rect(44.0, 80.0, 168.0, 114.0, 8.0);
+    b.fill(&p, palette::graya(0.06, 1.0), false);
+
+    // The crack — radiates from an off-centre impact point (the same kind of
+    // strike-point asymmetry the hammer icon itself has) out to six points around the
+    // screen's edge. Each arm gets a dark core plus a short, offset light highlight near
+    // the impact — the same "every stroke reads on any background" signature
+    // `decals.rs`'s own crack decal uses, simplified enough to still read at a 16px
+    // launcher size (the full decal's multi-ring fracture pattern would just be noise
+    // that small).
+    let impact = (150.0, 130.0);
+    let arms = [(60.0, 168.0), (48.0, 100.0), (110.0, 82.0), (200.0, 92.0), (196.0, 170.0), (120.0, 186.0)];
+    for arm in arms {
+        let (a, c) = (b.at(impact.0, impact.1), b.at(arm.0, arm.1));
+        b.line(a, c, palette::graya(0.85, 0.9), b.s(3.0));
+
+        let dir = (arm.0 - impact.0, arm.1 - impact.1);
+        let len = (dir.0 * dir.0 + dir.1 * dir.1).sqrt().max(1.0);
+        let unit = (dir.0 / len, dir.1 / len);
+        let perp = (-unit.1, unit.0);
+        let start = (impact.0 + perp.0 * 2.0, impact.1 + perp.1 * 2.0);
+        let end = (impact.0 + unit.0 * len * 0.4 + perp.0 * 3.0, impact.1 + unit.1 * len * 0.4 + perp.1 * 3.0);
+        let (a, c) = (b.at(start.0, start.1), b.at(end.0, end.1));
+        b.line(a, c, palette::graya(1.0, 0.55), b.s(1.5));
+    }
+
+    // The impact spark — a small warm accent, the one splash of colour against an
+    // otherwise steel-and-glass palette, the same role the muzzle flash or the phaser's
+    // own glow plays elsewhere in this set.
+    let p = b.ellipse(impact.0, impact.1, 10.0, 10.0);
+    b.fill(&p, palette::rgbaf(1.0, 0.62, 0.18, 0.95), false);
+    let p = b.ellipse(impact.0, impact.1, 4.0, 4.0);
+    b.fill(&p, palette::graya(1.0, 0.95), false);
+
+    b.outline();
+    b.finish_pixmap()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -797,6 +875,16 @@ mod tests {
         assert!(!is_blank(&icons.stamp(true).pixmap), "stamp (pressed) is blank");
         assert!(!is_blank(&icons.termite_hand().pixmap), "termite_hand is blank");
         assert!(!is_blank(&icons.washer().pixmap), "washer is blank");
+        assert!(!is_blank(&icons.app_icon()), "app_icon is blank");
+    }
+
+    #[test]
+    fn app_icon_is_square_and_deterministic() {
+        let icons = ToolIcons::new();
+        let a = icons.app_icon();
+        let b = icons.app_icon();
+        assert_eq!((a.width(), a.height()), (256, 256));
+        assert_eq!(a.data(), b.data(), "app_icon should be reproducible, not randomised");
     }
 
     #[test]

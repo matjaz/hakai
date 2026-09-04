@@ -322,6 +322,74 @@ run [`33910482064`](https://github.com/matjaz/hakai/actions/runs/33910482064).
 
 ---
 
-Still open for Phase 8: verifying the app launcher icon shows up correctly, a headless
-compositor smoke-test setup for CI (deferred, see chunk 5 above), a dedicated (non-cursor)
-app icon, and the actual AUR submission.
+---
+
+# Phase 8 — chunk 6: a dedicated app icon
+
+Goal: replace chunk 2's repurposed hammer cursor icon with something actually designed
+to be an app icon — closing the "flagged here rather than silently shipped as if it were
+final" follow-up from chunk 2.
+
+**A cracked monitor, not another tool.** Every existing icon in `hakai-core/src/icons.rs`
+is a faithful port of specific `IconBuilder.swift`/`ToolIcons.swift` geometry — this one
+isn't: the macOS `.app` bundle never needed a launcher icon the way a Linux `.desktop`
+entry does, so there was nothing to port. Deliberately not another tool icon reused or
+remixed — a cracked monitor reads as "desktop destruction" on its own, distinct from any
+single tool, and (unlike every cursor icon, each designed around an off-centre
+hotspot/pivot with cursor-sized padding) is drawn centred and symmetric, the way a
+launcher icon actually gets looked at.
+
+**Built from the same `IconBuilder` every tool icon already uses** — bezel, screen,
+stand, all `round_rect`/`fill`/`outline` calls in the same nominal 256×256 space and the
+same steel/plastic palette as the nine tool icons, so it reads as part of the same visual
+set rather than a mismatched addition. The one deliberate accent: a small warm
+orange-and-white "spark" at the crack's impact point — the one splash of colour against
+an otherwise grayscale bezel/glass palette, playing the same visual role the muzzle
+flash's or the phaser's own glow does elsewhere in this icon set.
+
+**One small, honest API addition**: `IconBuilder::finish_pixmap()`, alongside the
+existing `finish()` — for an icon with no hotspot/pivot/point-size concept at all, rather
+than either forcing meaningless placeholder hotspot values through the existing `finish()`
+just to satisfy its signature, or duplicating `IconBuilder`'s whole shape-drawing API for
+one caller. `ToolIcons::app_icon()` (uncached, unlike every other `ToolIcons` method — this
+is called exactly once, by `dump_icons`, never from a per-frame renderer path, so there's
+nothing worth caching) is the only thing that calls it.
+
+`dump_icons.rs` now writes it as `app.png` (not `icon-<name>.png` like the tool icons — it
+doesn't carry hotspot metadata to print, and `PKGBUILD` needed a name to reference either
+way); `PKGBUILD`'s `package()` installs that instead of `icon-1-hammer.png`.
+
+## Build & run
+
+```bash
+cd /mnt/mac/hakai-core
+cargo test
+cargo run --example dump_icons  # look at target/dump/app.png
+```
+
+New tests: `app_icon_is_square_and_deterministic` (256×256, reproducible — not
+randomised, matching every other procedural asset in this crate), and `app_icon` folded
+into the existing `every_icon_is_not_blank`.
+
+```bash
+cd ~/omarchy/packaging && BUILDDIR="$HOME/.cache/hakai-git-build" makepkg -si
+```
+
+Should now install the cracked-monitor icon, not the hammer, to
+`/usr/share/pixmaps/hakai.png` and the hicolor theme.
+
+## What "done" looks like
+
+- [ ] `hakai-core` builds and tests clean, including the two new `app_icon` tests
+- [ ] `target/dump/app.png` actually looks right — a legible cracked monitor, distinct
+      from a tool icon, reads at both 256px and scaled down to launcher size
+- [ ] A real `makepkg -si` installs it and it shows up correctly in an app launcher
+      (closing the still-open item from chunk 3's icon-cache hook hiccup, too)
+
+Not yet build-tested or visually reviewed — this is the first run since writing it.
+
+---
+
+Still open for Phase 8: visually confirming the new app icon (both the raw PNG and in a
+real app launcher), a headless compositor smoke-test setup for CI (deferred, see chunk 5),
+and the actual AUR submission.

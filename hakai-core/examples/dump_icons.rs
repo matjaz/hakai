@@ -39,5 +39,14 @@ fn main() {
     write("8-termites", icons.termite_hand());
     write("9-washer", icons.washer());
 
+    // Not a tool icon — no hotspot/pivot, so it doesn't go through `write` above. This is
+    // the one PKGBUILD actually installs as the app's own `.desktop`/hicolor icon.
+    let app_path = dir.join("app.png");
+    icons
+        .app_icon()
+        .save_png(&app_path)
+        .unwrap_or_else(|e| panic!("failed to save {}: {e}", app_path.display()));
+    println!("wrote {}", app_path.display());
+
     println!("done — wrote every tool icon to {}", dir.display());
 }
