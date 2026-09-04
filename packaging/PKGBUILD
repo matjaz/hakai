@@ -47,14 +47,22 @@ pkgver() {
 build() {
   cd "$srcdir/$pkgname"
 
-  # Both crates' own `.cargo/config.toml` redirect `target-dir` to a fixed path under
-  # `~/.cache/` — a dev-machine-specific workaround for building on a network-mounted
-  # source directory (see PHASE0.md), not something a package build should ever pick up:
-  # it assumes a specific user's home directory and would leak build artifacts outside
-  # makepkg's own sandboxed `$srcdir`. `CARGO_TARGET_DIR` (an env var) overrides a
-  # `.cargo/config.toml`'s `target-dir` per Cargo's own precedence rules, so this sidesteps
-  # it cleanly without having to modify or strip that file from the packaged source.
-  export CARGO_TARGET_DIR="$srcdir/target"
+  # Both crates' own `.cargo/config.toml` redirect `target-dir` to a fixed
+  # `/home/matjaz/.cache/...` path — a dev-machine-specific workaround for building on a
+  # network-mounted source directory (see PHASE0.md: it corrupts cargo's own crate
+  # metadata, "invalid metadata files for crate ..."), not something a package build
+  # should ever pick up, since it's hardcoded to one specific user's home directory.
+  # `CARGO_TARGET_DIR` (an env var, which overrides a `.cargo/config.toml`'s `target-dir`
+  # per Cargo's own precedence rules) sidesteps it without having to modify or strip that
+  # file from the packaged source — but pointing it at `$srcdir/target` was wrong: when
+  # `makepkg` itself runs from a network-mounted PKGBUILD directory (confirmed by a real
+  # build here — the exact same "invalid metadata files" error PHASE0.md already
+  # documented, just for `regex_automata` this time instead of `ash`), `$srcdir` is on
+  # that same mount, reintroducing the precise bug this override exists to avoid. `$HOME`
+  # (not a hardcoded username, unlike the dev config above — this has to work for whoever
+  # actually runs `makepkg`) is a real, local, non-mounted directory for any normal
+  # install, which is the actual property that matters here, not merely "not `$srcdir`".
+  export CARGO_TARGET_DIR="$HOME/.cache/hakai-git-build-target"
   export RUSTUP_TOOLCHAIN=stable
 
   cargo build --release --manifest-path hakai/Cargo.toml --locked
