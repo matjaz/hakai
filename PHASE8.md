@@ -234,8 +234,8 @@ purely on the hook's own error text.
 - [x] Default log level is quiet (`warn`) for a normal launch
 - [ ] The `.desktop` entry's icon renders correctly in a real app launcher (pending
       re-verification after the icon-cache hook failure above)
-- [ ] `Super Shift H` / `Super Shift Alt H` — see chunk 4 below, a real config-format
-      surprise found getting this working, not yet confirmed live
+- [x] `Super Shift H` / `Super Shift Alt H` — confirmed live ("works!"); see chunk 4 below
+      for a real config-format surprise found getting there
 
 ---
 
@@ -263,22 +263,21 @@ guessing from Hyprland's own upstream docs, which only document the raw `hl.*` A
 
 **Fixed in two places**: the correct bind lines
 (`o.bind("SUPER + SHIFT + H", "Destroy the desktop", "uwsm app -- hakai")`, and the `ALT`
-kill variant) were handed to the user to add to their real `bindings.lua` — not yet
-confirmed live. And, so the next person installing this package doesn't hit the exact
-same dead end regardless of that: `packaging/hyprland-bindings.conf.example` now leads
-with the Lua/`o.bind` form and keeps the classic hyprlang form as a clearly-labeled
-fallback for older, pre-Lua Omarchy installs — both `README.md` and `OMARCHY-PORT.md`'s
-own "What makes it Omarchy" section updated to match.
+kill variant) added to the user's real `bindings.lua` — confirmed working live ("works!").
+And, so the next person installing this package doesn't hit the exact same dead end:
+`packaging/hyprland-bindings.conf.example` now leads with the Lua/`o.bind` form and keeps
+the classic hyprlang form as a clearly-labeled fallback for older, pre-Lua Omarchy
+installs — both `README.md` and `OMARCHY-PORT.md`'s own "What makes it Omarchy" section
+updated to match.
 
 ## What "done" looks like (chunk 4)
 
 - [x] `packaging/hyprland-bindings.conf.example` covers both config formats, correctly
 - [x] `README.md` and `OMARCHY-PORT.md` updated to match
-- [ ] `Super Shift H` launches `hakai`, `Super Shift Alt H` kills it — not yet confirmed
-      live
+- [x] `Super Shift H` launches `hakai`, `Super Shift Alt H` kills it — confirmed live
 
 ---
 
-Still open for Phase 8: verifying the app launcher icon and the Hyprland keybind live, CI
-(`cargo test` for both crates, `gen_credits --check`, plus a headless-Hyprland smoke run),
-a dedicated (non-cursor) app icon, and the actual AUR submission.
+Still open for Phase 8: verifying the app launcher icon shows up correctly, CI (`cargo
+test` for both crates, `gen_credits --check`, plus a headless-Hyprland smoke run), a
+dedicated (non-cursor) app icon, and the actual AUR submission.
