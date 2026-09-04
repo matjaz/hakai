@@ -97,11 +97,10 @@ PKGBUILD's `source=`/`url=` fields need a real, fetchable git URL that doesn't e
   `Cargo.toml`, and a new repo-root `LICENSE` file — with a note that the license covers
   this project's own source only, not the separately-licensed bundled fonts (SIL OFL 1.1)
   and sounds (CC BY 4.0 / CC0 / Public Domain — see `CREDITS.md`, chunk 1).
-- **Repo hosting: not decided yet.** `PKGBUILD`'s `url`/`source` fields are clearly-marked
-  `TODO` placeholders (`https://github.com/TODO/hakai`) rather than a fabricated address —
-  everything else (dependencies, `build()`/`package()` steps, installed file layout) is
-  written and reviewable now regardless, and only those two lines need filling in once
-  this repo has a real remote.
+- **Repo hosting: `https://github.com/matjaz/hakai`**, the user's explicit choice, filled
+  into `PKGBUILD`'s `url`/`source` (previously clearly-marked `TODO` placeholders rather
+  than a fabricated address) and both crates' `Cargo.toml` `repository` fields. Still
+  untested end to end with `makepkg` — the repo has to actually be pushed there first.
 
 ## `-git`, not a release-tag package
 
@@ -147,18 +146,20 @@ happen without being asked.
 
 ## Build & run
 
-Not yet build-tested — `makepkg` needs a real, publicly-fetchable `source=` URL to run at
-all, which doesn't exist yet (see above). Once this repo has a remote:
+`url=`/`source=` now point at `https://github.com/matjaz/hakai` — still not yet
+build-tested, since `makepkg` actually needs that content pushed there first:
 
 ```bash
-# fill in packaging/PKGBUILD's url=/source= first
+git push -u origin main   # once the repo has that remote added
 cd packaging && makepkg -si
 ```
 
 ## What "done" looks like
 
-- [ ] `LICENSE` exists, matches the chosen license, and both `Cargo.toml`s declare it
-- [ ] `PKGBUILD` builds cleanly with `makepkg` once `url=`/`source=` are filled in
+- [x] `LICENSE` exists, matches the chosen license, and both `Cargo.toml`s declare it
+- [x] `PKGBUILD`'s `url=`/`source=` point at the real repo
+- [ ] The repo is actually pushed to `https://github.com/matjaz/hakai`
+- [ ] `PKGBUILD` builds cleanly with `makepkg` against the pushed repo
 - [ ] The installed binary runs, the `.desktop` entry appears in an app launcher with a
       real (if placeholder) icon, and `/usr/share/doc/hakai-git/` has the credits and the
       keybind snippet
@@ -167,7 +168,8 @@ cd packaging && makepkg -si
 
 ---
 
-Still open for Phase 8: filling in `PKGBUILD`'s `url=`/`source=` once this repo has a
-public remote, CI (`cargo test` for both crates, `gen_credits --check`, plus a
+Still open for Phase 8: pushing this repo to `https://github.com/matjaz/hakai` (nothing
+has been pushed anywhere yet — everything so far is local commits), then a real
+`makepkg` run against it, CI (`cargo test` for both crates, `gen_credits --check`, plus a
 headless-Hyprland smoke run), a dedicated (non-cursor) app icon, and the actual AUR
 submission.

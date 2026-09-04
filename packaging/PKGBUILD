@@ -1,9 +1,9 @@
 # Maintainer: Matjaz Lipus <matjazl@gmail.com>
 #
-# DRAFT — not yet submitted to the AUR. `url`/`source` below are placeholders (see the
-# TODO markers) until this repo has a public git remote; everything else (dependencies,
-# build/package steps, installed files) is written and reviewable now. See
-# `OMARCHY-PORT.md`'s Phase 8 writeup and `PHASE8.md` (repo root) for the full context.
+# DRAFT — not yet submitted to the AUR. `url`/`source` now point at the real repo; still
+# untested end to end with `makepkg` (needs that remote to actually have this content
+# pushed to it — see PHASE8.md for what's still open). See `OMARCHY-PORT.md`'s Phase 8
+# writeup and `PHASE8.md` (repo root) for the full context.
 #
 # `-git`, not a release-tag package: there's no tagged release yet, and this project is
 # still under active development — a VCS package is the right shape until that changes,
@@ -15,7 +15,7 @@ pkgver=0.0.1.r1.g0000000  # placeholder — pkgver() below recomputes this from 
 pkgrel=1
 pkgdesc="Smash, burn and repaint your desktop — a native Wayland/Hyprland desktop-destruction toy for Omarchy"
 arch=('x86_64') # aarch64 is architecturally plausible (no x86-specific code) but not yet verified on real hardware — add once it is
-url="https://github.com/TODO/hakai" # TODO: fill in once this repo has a public remote
+url="https://github.com/matjaz/hakai"
 license=('MIT')
 # The MIT license covers the source in this repository only. Bundled fonts (SIL OFL 1.1)
 # and sounds (a mix of CC BY 4.0 / CC0 / Public Domain) are separately licensed — see

@@ -4,7 +4,7 @@ version = "0.0.1"
 edition = "2021"
 description = "Smash, burn and repaint your desktop — a native Wayland/Hyprland desktop-destruction toy for Omarchy."
 license = "MIT"
-repository = "https://github.com/TODO/hakai" # placeholder — no public remote yet, see PHASE8.md
+repository = "https://github.com/matjaz/hakai"
 
 [[bin]]
 name = "hakai"
