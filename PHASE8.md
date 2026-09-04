@@ -146,11 +146,15 @@ happen without being asked.
 
 ## Build & run
 
-`url=`/`source=` now point at `https://github.com/matjaz/hakai` — still not yet
-build-tested, since `makepkg` actually needs that content pushed there first:
+Pushed to `github.com/matjaz/hakai` (`main`, commit `b69276b` at push time). **The repo is
+currently private** — `git remote add` used SSH (matching the account's own `gh` protocol
+config), which works fine for pushing, but `makepkg`'s anonymous `git+https://...` fetch in
+`source=` (and, later, actual AUR builders) needs public read access. Until the repo goes
+public, either test locally with a manually-adjusted SSH `source=` URL, or flip visibility
+first:
 
 ```bash
-git push -u origin main   # once the repo has that remote added
+gh repo edit matjaz/hakai --visibility public   # when ready
 cd packaging && makepkg -si
 ```
 
@@ -158,7 +162,9 @@ cd packaging && makepkg -si
 
 - [x] `LICENSE` exists, matches the chosen license, and both `Cargo.toml`s declare it
 - [x] `PKGBUILD`'s `url=`/`source=` point at the real repo
-- [ ] The repo is actually pushed to `https://github.com/matjaz/hakai`
+- [x] The repo is pushed to `https://github.com/matjaz/hakai`
+- [ ] The repo is public (currently private — `makepkg`'s anonymous HTTPS fetch needs
+      public read access)
 - [ ] `PKGBUILD` builds cleanly with `makepkg` against the pushed repo
 - [ ] The installed binary runs, the `.desktop` entry appears in an app launcher with a
       real (if placeholder) icon, and `/usr/share/doc/hakai-git/` has the credits and the
@@ -168,8 +174,7 @@ cd packaging && makepkg -si
 
 ---
 
-Still open for Phase 8: pushing this repo to `https://github.com/matjaz/hakai` (nothing
-has been pushed anywhere yet — everything so far is local commits), then a real
-`makepkg` run against it, CI (`cargo test` for both crates, `gen_credits --check`, plus a
-headless-Hyprland smoke run), a dedicated (non-cursor) app icon, and the actual AUR
-submission.
+Still open for Phase 8: making the repo public (needed before `makepkg`'s anonymous fetch
+or an AUR builder can reach it), a real `makepkg` run against it, CI (`cargo test` for both
+crates, `gen_credits --check`, plus a headless-Hyprland smoke run), a dedicated
+(non-cursor) app icon, and the actual AUR submission.
