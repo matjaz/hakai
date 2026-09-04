@@ -5,6 +5,7 @@ edition = "2021"
 description = "Smash, burn and repaint your desktop — a native Wayland/Hyprland desktop-destruction toy for Omarchy."
 license = "MIT"
 repository = "https://github.com/matjaz/hakai"
+readme = "../README.md"
 
 [[bin]]
 name = "hakai"
