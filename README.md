@@ -54,11 +54,15 @@ cargo test
 ```
 
 A suggested Hyprland keybind (not applied automatically — see
-[`packaging/hyprland-bindings.conf.example`](packaging/hyprland-bindings.conf.example)):
+[`packaging/hyprland-bindings.conf.example`](packaging/hyprland-bindings.conf.example) for
+both the current Lua form and the classic hyprlang one, depending on your Hyprland
+version). On a current Omarchy install (Hyprland 0.55+, Lua config), add this to
+`~/.config/hypr/bindings.lua` — not `bindings.conf`, which nothing loads once you're on
+Lua — then `hyprctl reload`:
 
-```
-bindd = SUPER SHIFT, H, Destroy the desktop, exec, uwsm app -- hakai
-bindd = SUPER SHIFT ALT, H, Stop destroying it, exec, pkill -x hakai
+```lua
+o.bind("SUPER + SHIFT + H", "Destroy the desktop", "uwsm app -- hakai")
+o.bind("SUPER + SHIFT + ALT + H", "Stop destroying it", "pkill -x hakai")
 ```
 
 ## Layout

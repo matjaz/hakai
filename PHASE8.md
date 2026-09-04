@@ -234,9 +234,48 @@ purely on the hook's own error text.
 - [x] Default log level is quiet (`warn`) for a normal launch
 - [ ] The `.desktop` entry's icon renders correctly in a real app launcher (pending
       re-verification after the icon-cache hook failure above)
-- [ ] `Super Shift H` / `Super Shift Alt H` verified live — needs adding to
-      `~/.config/hypr/bindings.conf` by hand first (not applied automatically, see the
-      keybind section of `README.md`), then `hyprctl reload`
+- [ ] `Super Shift H` / `Super Shift Alt H` — see chunk 4 below, a real config-format
+      surprise found getting this working, not yet confirmed live
+
+---
+
+# Phase 8 — chunk 4: the Hyprland keybind, on a Lua config — a repeat mistake, caught
+
+Goal: actually verify `Super Shift H` / `Super Shift Alt H` live, not just ship a snippet
+and assume it works. It didn't, the first time — and the reason was a mistake this
+project had already made once before in this same conversation, just in a different spot.
+
+**What went wrong.** `packaging/hyprland-bindings.conf.example` shipped only the classic
+hyprlang form (`bindd = SUPER SHIFT, H, ...`, for `~/.config/hypr/bindings.conf`).
+Appending it and running `hyprctl reload` did nothing — no error, just silently no bind.
+This Omarchy install is on Hyprland 0.55+'s **Lua** config, the exact same fact that broke
+a plain `hyprctl keyword monitor` call earlier in Phase 6/7's fractional-scale work (see
+`hakai/PHASE6.md`) — and should have been remembered and accounted for here the first
+time, not rediscovered the hard way a second time on the same box.
+
+**The real file and the real API.** `~/.config/hypr/hyprland.lua` `require()`s
+`~/.config/hypr/bindings.lua` (via `require("hypr.bindings")`) — `bindings.conf` isn't
+loaded by anything once you're on Lua. And Omarchy doesn't expose the raw Hyprland Lua
+API (`hl.bind`/`hl.dsp.exec_cmd`) directly for this — it wraps it in its own
+`o.bind(keys, description, command)`, confirmed by reading the user's actual
+`bindings.lua` (which ships commented-out examples in exactly this form) rather than
+guessing from Hyprland's own upstream docs, which only document the raw `hl.*` API.
+
+**Fixed in two places**: the correct bind lines
+(`o.bind("SUPER + SHIFT + H", "Destroy the desktop", "uwsm app -- hakai")`, and the `ALT`
+kill variant) were handed to the user to add to their real `bindings.lua` — not yet
+confirmed live. And, so the next person installing this package doesn't hit the exact
+same dead end regardless of that: `packaging/hyprland-bindings.conf.example` now leads
+with the Lua/`o.bind` form and keeps the classic hyprlang form as a clearly-labeled
+fallback for older, pre-Lua Omarchy installs — both `README.md` and `OMARCHY-PORT.md`'s
+own "What makes it Omarchy" section updated to match.
+
+## What "done" looks like (chunk 4)
+
+- [x] `packaging/hyprland-bindings.conf.example` covers both config formats, correctly
+- [x] `README.md` and `OMARCHY-PORT.md` updated to match
+- [ ] `Super Shift H` launches `hakai`, `Super Shift Alt H` kills it — not yet confirmed
+      live
 
 ---
 
