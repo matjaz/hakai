@@ -1,0 +1,9 @@
+# This repo's source is LF. Windows contributors (the hakai-win crate) get CRLF in their
+# working tree via core.autocrlf if they want it, but LF is what lands in a commit.
+* text=auto eol=lf
+
+# Binary assets — never touch.
+*.png binary
+*.jpg binary
+*.ttf binary
+*.wav binary
