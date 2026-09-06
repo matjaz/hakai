@@ -4,11 +4,14 @@
 //! layer, the nine tool instances, particles, the termite colony, HUD logic, tool
 //! switching, and `advance` — is unchanged from `hakai/src/main.rs`.
 //!
-//! One window == one `GpuLayer` for now. The `Vec<GpuLayer>` shape is kept so Phase 5
-//! (multi-monitor) is an additive change rather than a restructure.
+//! One window per monitor, one `GpuLayer` each (Phase 5), mirroring the Linux binary's
+//! one-layer-surface-per-`wl_output`. Every `GpuLayer` owns its own damage layer, RNG,
+//! tool set and scale factor.
 
 use std::collections::HashMap;
 use std::time::Instant;
+
+use winit::window::WindowId;
 
 use hakai_core::audio::AudioSink;
 use hakai_core::colony::TermiteColony;
@@ -23,18 +26,21 @@ use crate::capture::BrightnessMap;
 use crate::render::{Assets, ToastGpu, TileGpu};
 use crate::text::TextRenderer;
 
-/// One output — here, one window. `wgpu_surface`/`config` are the platform edge; every
-/// other field is the same per-output game state the Linux `GpuLayer` carries.
+/// One output — one monitor's window. `wgpu_surface`/`config`/`window_id` are the platform
+/// edge; every other field is the same per-output game state the Linux `GpuLayer` carries.
 pub struct GpuLayer {
+    pub window_id: WindowId,
     pub wgpu_surface: wgpu::Surface<'static>,
     config: wgpu::SurfaceConfiguration,
 
-    /// Surface size in the scene's working unit. On Windows that's physical pixels with
-    /// `scale == 1.0` for now — winit reports physical pixels for both the window size and
-    /// pointer events, and `DamageLayer` treats its inputs as one consistent unit, so
-    /// nothing needs a conversion until Phase 5 wires up Per-Monitor DPI properly.
+    /// This output's size in **points** (logical units) — the scene's working unit,
+    /// matching mouse coordinates and `DamageLayer`, exactly as the Linux binary keeps
+    /// `gpu.width`/`gpu.height`. The wgpu surface's own pixel buffer is `points * scale`
+    /// (see `config`), computed only where it's needed. NDC is a ratio, so every placement
+    /// in `render.rs` comes out identical whether it's expressed in points or pixels.
     pub width: u32,
     pub height: u32,
+    /// Per-Monitor DPI v2 scale factor from winit (`1.0`, `1.25`, `1.5`, ...).
     pub scale: f32,
     pub configured: bool,
 
@@ -59,18 +65,29 @@ pub struct GpuLayer {
 }
 
 impl GpuLayer {
+    fn buffer_px(&self) -> (u32, u32) {
+        (
+            ((self.width as f32 * self.scale).round() as u32).max(1),
+            ((self.height as f32 * self.scale).round() as u32).max(1),
+        )
+    }
+
     /// Re-runs `surface.configure` with the stored config — after a `Lost`/`Outdated`
-    /// acquire, or a resize (which updates the config first).
+    /// acquire. Kept infallible: a genuinely gone surface (an unplugged monitor) just
+    /// keeps failing `get_current_texture` on the next frame, which `render` also tolerates.
     pub fn reconfigure_surface(&self, device: &wgpu::Device) {
         self.wgpu_surface.configure(device, &self.config);
     }
 
-    /// A window resize: new pixel size, reconfigure the surface, rebuild the damage grid.
-    pub fn resize(&mut self, width: u32, height: u32, assets: &Assets) {
-        self.width = width.max(1);
-        self.height = height.max(1);
-        self.config.width = self.width;
-        self.config.height = self.height;
+    /// A resize or scale change: `physical` is winit's `inner_size()` in pixels, `scale`
+    /// its `scale_factor()`. Points = physical / scale; the surface buffer stays physical.
+    pub fn resize(&mut self, physical: (u32, u32), scale: f32, assets: &Assets) {
+        self.scale = if scale > 0.0 { scale } else { 1.0 };
+        self.width = ((physical.0 as f32 / self.scale).round() as u32).max(1);
+        self.height = ((physical.1 as f32 / self.scale).round() as u32).max(1);
+        let (bw, bh) = self.buffer_px();
+        self.config.width = bw;
+        self.config.height = bh;
         self.wgpu_surface.configure(&assets.device, &self.config);
         assets.build_damage(self);
         self.configured = true;
@@ -81,31 +98,49 @@ pub struct State {
     pub assets: Assets,
     pub decals: DecalFactory,
     pub icons: ToolIcons,
-    /// Kept for asset rebuilds on a scale/monitor change (Phase 5); unused so far.
+    /// Kept for asset rebuilds on a scale/monitor change; unused so far.
     #[allow(dead_code)]
     pub sprites: SpriteFactory,
     pub text: TextRenderer,
     pub audio: AudioSink,
     pub layers: Vec<GpuLayer>,
 
-    /// DXGI Desktop Duplication — `None` when it isn't available (hybrid graphics, a
-    /// Remote Desktop session, another duplicator already running). Every tool then falls
-    /// back to a random impact-sound variant.
+    /// DXGI Desktop Duplication of the **primary** output — `None` when it isn't available
+    /// (hybrid graphics, a Remote Desktop session, another duplicator already running).
+    /// Every tool then falls back to a random impact-sound variant. On a multi-monitor
+    /// setup a secondary output's brightness is sampled from the primary's capture — not
+    /// accurate, but no worse than the random fallback, and per-output duplication is a
+    /// later refinement.
     pub duplication: Option<crate::duplication::DesktopDuplication>,
     /// `None` until the first capture — so the brightness map is populated on the very
     /// first frame rather than after a full `CAPTURE_INTERVAL`.
     pub last_capture: Option<Instant>,
 
-    /// Whether the cursor is inside the window — the Windows equivalent of the Linux
-    /// binary's `pointer_focus` (which output the pointer is over). Gates cursor drawing.
-    pub pointer_inside: bool,
+    /// Which layer the cursor is currently over (Wayland's per-surface pointer focus, here
+    /// tracked from `CursorEntered`/`CursorLeft`). Gates cursor drawing to that output.
+    pub focused_layer: Option<usize>,
     pub shift_held: bool,
 }
 
 impl State {
-    /// Creates the single `GpuLayer` for a freshly-made window surface at `(width,
-    /// height)` physical pixels, configures it, and builds its damage grid.
-    pub fn add_window_layer(&mut self, wgpu_surface: wgpu::Surface<'static>, adapter: &wgpu::Adapter, width: u32, height: u32) {
+    pub fn layer_index(&self, id: WindowId) -> Option<usize> {
+        self.layers.iter().position(|l| l.window_id == id)
+    }
+
+    /// Adds a `GpuLayer` for a freshly-made window surface. `physical` is the window's
+    /// `inner_size()` in pixels, `scale` its `scale_factor()`.
+    pub fn add_window_layer(
+        &mut self,
+        window_id: WindowId,
+        wgpu_surface: wgpu::Surface<'static>,
+        adapter: &wgpu::Adapter,
+        physical: (u32, u32),
+        scale: f32,
+    ) {
+        let scale = if scale > 0.0 { scale } else { 1.0 };
+        let width = ((physical.0 as f32 / scale).round() as u32).max(1);
+        let height = ((physical.1 as f32 / scale).round() as u32).max(1);
+
         let caps = wgpu_surface.get_capabilities(adapter);
         let format = caps.formats.iter().copied().find(|f| !f.is_srgb()).unwrap_or(caps.formats[0]);
         let alpha_mode = caps
@@ -117,8 +152,8 @@ impl State {
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format,
-            width: width.max(1),
-            height: height.max(1),
+            width: physical.0.max(1),
+            height: physical.1.max(1),
             present_mode: wgpu::PresentMode::AutoVsync,
             desired_maximum_frame_latency: 2,
             alpha_mode,
@@ -134,11 +169,12 @@ impl State {
             .wrapping_add(self.layers.len() as u64 + 1);
 
         let mut layer = GpuLayer {
+            window_id,
             wgpu_surface,
             config,
-            width: width.max(1),
-            height: height.max(1),
-            scale: 1.0,
+            width,
+            height,
+            scale,
             configured: false,
             damage: None,
             tiles: Vec::new(),
@@ -159,6 +195,17 @@ impl State {
         self.assets.build_damage(&mut layer);
         layer.configured = true;
         self.layers.push(layer);
+    }
+
+    /// Drops the layer for a window that's gone (a monitor unplugged, its window
+    /// destroyed) — leaves the rest running.
+    pub fn remove_window_layer(&mut self, id: WindowId) {
+        self.layers.retain(|l| l.window_id != id);
+        if let Some(f) = self.focused_layer {
+            if f >= self.layers.len() {
+                self.focused_layer = None;
+            }
+        }
     }
 
     // ── Tool switching and global commands (verbatim from the Linux binary) ────────────────
@@ -322,18 +369,20 @@ impl State {
                 dt
             };
             State::advance(&mut self.decals, &mut self.audio, &mut self.layers[i], dt);
+            // The audio gain-glide must advance once per real frame total, not once per
+            // output — drive it from the first output only, matching AudioEngine.swift.
             if i == 0 {
                 self.audio.update(dt);
             }
-            let show_cursor = self.pointer_inside && i == 0;
+            let show_cursor = self.focused_layer == Some(i);
             crate::render::render(&self.assets, &mut self.text, &mut self.icons, show_cursor, &mut self.layers[i]);
         }
     }
 
-    // ── Input ────────────────────────────────────────────────────────────────────────────
+    // ── Input (per-output; `idx` is the layer the event landed on) ────────────────────────
 
-    pub fn pointer_moved(&mut self, point: (f32, f32)) {
-        let Some(gpu) = self.layers.first_mut() else { return };
+    pub fn pointer_moved(&mut self, idx: usize, point: (f32, f32)) {
+        let Some(gpu) = self.layers.get_mut(idx) else { return };
         gpu.mouse = point;
         if !gpu.is_down {
             return;
@@ -354,8 +403,8 @@ impl State {
         }
     }
 
-    pub fn pointer_pressed(&mut self, point: (f32, f32)) {
-        let Some(gpu) = self.layers.first_mut() else { return };
+    pub fn pointer_pressed(&mut self, idx: usize, point: (f32, f32)) {
+        let Some(gpu) = self.layers.get_mut(idx) else { return };
         gpu.mouse = point;
 
         let screen = (gpu.width as f32, gpu.height as f32);
@@ -368,11 +417,11 @@ impl State {
             self.select_tool(id);
             return;
         }
-        if self.layers[0].hud.credits_open() {
+        if self.layers[idx].hud.credits_open() {
             return;
         }
 
-        let gpu = &mut self.layers[0];
+        let gpu = &mut self.layers[idx];
         gpu.is_down = true;
         let active = gpu.active_tool;
         if let (Some(tool), Some(damage)) = (gpu.tools.get_mut(&active), gpu.damage.as_mut()) {
@@ -390,8 +439,8 @@ impl State {
         }
     }
 
-    pub fn pointer_released(&mut self, point: (f32, f32)) {
-        let Some(gpu) = self.layers.first_mut() else { return };
+    pub fn pointer_released(&mut self, idx: usize, point: (f32, f32)) {
+        let Some(gpu) = self.layers.get_mut(idx) else { return };
         gpu.mouse = point;
         gpu.is_down = false;
         let active = gpu.active_tool;
