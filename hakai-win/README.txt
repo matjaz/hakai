@@ -30,6 +30,12 @@ Keys
 Left mouse button uses the current tool. Alt+Tab, the Windows key and
 Ctrl+Alt+Del all still work — the overlay can never trap you.
 
+Esc is a global hotkey: it closes hakai from anywhere, even after you've
+Alt+Tabbed to another app. While hakai runs, Esc won't reach other apps
+(so it can't, for instance, leave a full-screen video). Set
+HAKAI_NO_GLOBAL_ESC=1 to make Esc app-local instead (it then only closes
+hakai while hakai itself is focused).
+
 
 Tools
 -----

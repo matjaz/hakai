@@ -75,6 +75,12 @@ fn overlay_attributes(monitor: Option<&MonitorHandle>) -> winit::window::WindowA
     attrs
 }
 
+/// Posted into the event loop from the global-hotkey thread (`win32::spawn_quit_hotkey`).
+#[derive(Debug, Clone, Copy)]
+enum UserEvent {
+    Quit,
+}
+
 #[derive(Default)]
 struct App {
     instance: Option<wgpu::Instance>,
@@ -200,10 +206,16 @@ impl App {
     }
 }
 
-impl ApplicationHandler for App {
+impl ApplicationHandler<UserEvent> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.windows.is_empty() {
             self.init(event_loop);
+        }
+    }
+
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UserEvent) {
+        match event {
+            UserEvent::Quit => event_loop.exit(),
         }
     }
 
@@ -321,7 +333,15 @@ fn main() {
     // while it's still the foreground window.
     win32::minimize_launcher();
 
-    let event_loop = EventLoop::new().expect("event loop");
+    let event_loop = EventLoop::<UserEvent>::with_user_event().build().expect("event loop");
     event_loop.set_control_flow(ControlFlow::Poll);
+
+    // Esc closes hakai from anywhere — even after Alt+Tabbing to another app. The hotkey
+    // thread posts UserEvent::Quit back into the loop.
+    let proxy = event_loop.create_proxy();
+    win32::spawn_quit_hotkey(move || {
+        let _ = proxy.send_event(UserEvent::Quit);
+    });
+
     event_loop.run_app(&mut App::default()).expect("run_app");
 }

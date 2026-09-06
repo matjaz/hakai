@@ -9,10 +9,11 @@ use windows::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
 };
 use windows::Win32::System::Threading::GetCurrentProcessId;
+use windows::Win32::UI::Input::KeyboardAndMouse::{RegisterHotKey, MOD_NOREPEAT, VK_ESCAPE};
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetForegroundWindow, GetWindow, GetWindowLongPtrW, GetWindowThreadProcessId,
-    IsWindowVisible, SetLayeredWindowAttributes, SetWindowLongPtrW, ShowWindowAsync, GWL_EXSTYLE,
-    GW_OWNER, LWA_ALPHA, SW_MINIMIZE, WS_EX_LAYERED,
+    EnumWindows, GetForegroundWindow, GetMessageW, GetWindow, GetWindowLongPtrW,
+    GetWindowThreadProcessId, IsWindowVisible, SetLayeredWindowAttributes, SetWindowLongPtrW,
+    ShowWindowAsync, GWL_EXSTYLE, GW_OWNER, LWA_ALPHA, MSG, SW_MINIMIZE, WM_HOTKEY, WS_EX_LAYERED,
 };
 
 fn hwnd_of(window: &Window) -> Option<HWND> {
@@ -159,4 +160,41 @@ pub fn minimize_launcher() {
             log::debug!("minimize_launcher: minimized foreground window");
         }
     }
+}
+
+// ── Global Esc-to-quit ──────────────────────────────────────────────────────────────────
+
+/// Registers a system-wide **Esc** hotkey so hakai always closes on Esc, even after you
+/// Alt+Tab away to another app (a video, a browser). Runs its own tiny message loop on a
+/// dedicated thread — `RegisterHotKey` delivers `WM_HOTKEY` to the thread that called it,
+/// which winit's event loop doesn't surface. On the hotkey, `on_quit` runs once and the
+/// thread ends (which also unregisters the hotkey).
+///
+/// Trade-off: while hakai runs, Esc is reserved — it won't reach other apps (so it can't,
+/// e.g., leave a full-screen YouTube video). That's the "Esc must always close hakai"
+/// behaviour that was asked for. `HAKAI_NO_GLOBAL_ESC` keeps Esc app-local (it then only
+/// quits hakai while hakai itself is focused).
+pub fn spawn_quit_hotkey<F: Fn() + Send + 'static>(on_quit: F) {
+    if std::env::var("HAKAI_NO_GLOBAL_ESC").is_ok() {
+        return;
+    }
+    std::thread::spawn(move || unsafe {
+        const HOTKEY_ID: i32 = 1;
+        if let Err(e) = RegisterHotKey(None, HOTKEY_ID, MOD_NOREPEAT, VK_ESCAPE.0 as u32) {
+            log::warn!("global Esc hotkey unavailable ({e}) — Esc quits only while hakai is focused");
+            return;
+        }
+        log::debug!("global Esc hotkey registered");
+        let mut msg = MSG::default();
+        loop {
+            let got = GetMessageW(&mut msg, None, 0, 0);
+            if got.0 <= 0 {
+                break; // 0 = WM_QUIT, -1 = error
+            }
+            if msg.message == WM_HOTKEY && msg.wParam.0 as i32 == HOTKEY_ID {
+                on_quit();
+                break;
+            }
+        }
+    });
 }
