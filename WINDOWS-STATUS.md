@@ -110,6 +110,13 @@ Run `cargo run --release --manifest-path hakai-win/Cargo.toml` on a real Windows
       `WindowEvent::Destroyed`)
 - [ ] SmartScreen behaviour on a genuine download (Mark-of-the-Web) — one "More info → Run
       anyway", per `WINDOWS-PORT.md`
+- [ ] A YouTube (or other hardware-accelerated) video behind the overlay keeps playing and
+      stays visible — the `WS_EX_LAYERED` + alpha-254 mark (`win32::mark_non_occluding`) is
+      the standard fix for browser occlusion-throttling, but couldn't be checked on the dev
+      box (GDI/PrintWindow can't capture hardware video planes). `HAKAI_NO_LAYERED=1` backs
+      it out.
+- [ ] Launching from a terminal minimises that terminal (`win32::minimize_launcher`);
+      double-clicking from Explorer minimises nothing. `HAKAI_KEEP_TERMINAL=1` keeps it.
 
 If the overlay renders at the wrong size on any box, `HAKAI_WINDOWED=1` runs it as a plain
 window as a fallback.
