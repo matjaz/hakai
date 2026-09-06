@@ -1,0 +1,68 @@
+[package]
+name = "hakai-win"
+version = "0.0.1"
+edition = "2021"
+description = "Smash, burn and repaint your desktop — the Windows build of hakai."
+license = "MIT"
+repository = "https://github.com/matjaz/hakai"
+readme = "../README.md"
+
+[[bin]]
+name = "hakai-win"
+path = "src/main.rs"
+
+[profile.release]
+strip = true
+
+[dependencies]
+# The headless core — the damage layer, all nine tools, decal/icon/sprite generators, the
+# termite colony, particles, HUD/credits logic. Identical to what the Linux binary depends
+# on; nothing in it is platform-specific.
+hakai-core = { path = "../hakai-core" }
+# hakai-core's own raster dep, pinned to match — render.rs / text.rs name `tiny_skia`
+# types directly.
+tiny-skia = "0.11"
+
+# Phase 0 found wgpu 22's D3D12 backend only offers CompositeAlphaMode::Opaque on a plain
+# HWND. wgpu 27+ added Dx12SwapchainKind::DxgiFromVisual (a DirectComposition presentation
+# path) which does support transparency, so the Windows build tracks modern wgpu rather
+# than the Linux binary's pinned 22. The ~1000 lines of render code are ported here
+# against wgpu 30 rather than #[path]-shared; WINDOWS-PLAN.md Phase 7 unifies them later.
+wgpu = "30"
+raw-window-handle = "0.6"
+pollster = "0.3"
+bytemuck = { version = "1", features = ["derive"] }
+
+env_logger = "0.11"
+log = "0.4"
+
+# The window + event loop, replacing smithay-client-toolkit + calloop.
+winit = "0.30"
+
+# HUD text shaping — same crate and version the Linux binary's text.rs uses (which this
+# crate #[path]-includes verbatim).
+cosmic-text = "0.12"
+
+# Real audio — same as the Linux binary's audio.rs (also #[path]-included verbatim).
+# cpal picks the WASAPI host on Windows; hound decodes the bundled WAVs.
+cpal = "0.18"
+hound = "3"
+
+# Win32 escape hatches + (Phase 4) DXGI Desktop Duplication for screen capture. Matches
+# the copy wgpu-hal 30 pulls in, so there's one unified `windows` in the tree.
+[dependencies.windows]
+version = "0.62"
+features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Graphics_Gdi",
+    "Win32_System_Console",
+    "Win32_System_Threading",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_UI_Input_KeyboardAndMouse",
+    # DXGI Desktop Duplication — the brightness-under-cursor capture (Phase 4).
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Direct3D11",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+]

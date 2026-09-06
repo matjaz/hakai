@@ -99,11 +99,43 @@ o.bind("SUPER + SHIFT + H", "Destroy the desktop", "uwsm app -- hakai")
 o.bind("SUPER + SHIFT + ALT + H", "Stop destroying it", "pkill -x hakai")
 ```
 
+## Windows
+
+There's a native Windows build — `hakai-win/`, a separate binary crate against the same
+unchanged `hakai-core`. It's a transparent Direct3D 12 overlay (one per monitor) with the
+same nine tools, `cpal`/WASAPI audio, and DXGI Desktop Duplication standing in for
+`wlr-screencopy`. `theme.rs` is stubbed — it ships the built-in palette, since Windows has
+no coherent system theme to read.
+
+Download the portable `.zip` from the releases page (or build it — see below), extract it
+anywhere, and run `hakai-win.exe`. Nothing to install; the fonts and all 35 sounds are
+compiled into the binary. It's unsigned, so SmartScreen shows once — *More info* → *Run
+anyway*. See [`hakai-win/README.txt`](hakai-win/README.txt) for the key list and notes.
+
+Building it needs the MSVC toolchain (`rustup` picks `x86_64-pc-windows-msvc` by default;
+install "Desktop development with C++" from the VS Build Tools):
+
+```powershell
+cargo run  --release --manifest-path hakai-win/Cargo.toml   # run it
+powershell -File hakai-win/package.ps1                       # build the release zip
+```
+
+Unlike the Linux binary, `hakai-win` tracks modern `wgpu` (30, not 22): wgpu 22's D3D12
+backend can't present a per-pixel-alpha surface to a plain window, and the
+`DirectComposition` path that can only landed later. The ~1000 lines of shared render code
+are duplicated across the two binaries for now rather than `#[cfg]`-split; unifying them
+into `hakai-core` (and bumping the Linux side to wgpu 30) is a later step.
+
+See `WINDOWS-PORT.md` (analysis) and `WINDOWS-PLAN.md` (the phased build log) for the full
+story.
+
 ## Layout
 
 ```
-hakai/         the binary — wlr-layer-shell + wgpu rendering, Wayland input, cpal audio,
-               screen capture, Omarchy theme integration
+hakai/         the Linux binary — wlr-layer-shell + wgpu rendering, Wayland input, cpal
+               audio, screen capture, Omarchy theme integration
+hakai-win/     the Windows binary — a DirectComposition overlay, winit, DXGI Desktop
+               Duplication; same hakai-core, audio.rs and text.rs shared verbatim
 hakai-core/    headless library — everything that doesn't need a window: the tiled damage
                layer, procedural decal/icon/sprite generators, all nine tools, the termite
                colony, particle system, HUD/credits logic
@@ -130,6 +162,11 @@ theming) is done and confirmed working on real Hyprland hardware. Packaging is m
 done — `PKGBUILD`, CI, and a real `makepkg -si` install are all confirmed working — with
 AUR submission itself on hold until the AUR's own registration lockdown lifts (see
 [Installing](#installing)). See `PHASE8.md` for the full packaging writeup.
+
+The Windows build is functional end to end — overlay, all nine tools, audio, brightness
+capture, multi-monitor scaffolding, a portable zip that runs on a clean box. Verified on
+real hardware, though some checks (every tool, multiple monitors) are still pending a
+normal display. See `WINDOWS-PLAN.md` for what's confirmed and what isn't.
 
 ## License
 
