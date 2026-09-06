@@ -21,6 +21,10 @@
 
 use std::process::Command;
 
+/// The HUD chrome palette — re-exported from `hakai_core` so the renderer (also there) and
+/// both binaries agree on one type. This module owns only the *reading* of it.
+pub use hakai_core::render::theme::HudColors;
+
 /// Order matches `hakai_core::decals::DecalFactory::DEFAULT_PAINT_COLORS` exactly: red,
 /// green, blue, yellow, purple, cyan, orange, pink. Omarchy has no "pink" concept of its
 /// own — `bright_magenta`, a lighter/warmer magenta, stands in for it; every other slot
@@ -44,27 +48,6 @@ pub fn read_paint_colors() -> Option<[(f32, f32, f32); 8]> {
         colors[i] = query_color(key)?;
     }
     Some(colors)
-}
-
-/// The active Omarchy theme's HUD chrome colours — panel backgrounds, borders/text, and
-/// the accent used for the selected palette cell and the credits panel's "Accent" text
-/// colour. `u8` per channel (not the `0.0..=1.0` floats `read_paint_colors` uses): every
-/// call site hands these straight to `tiny_skia::Color::from_rgba8`/
-/// `TextRenderer::rasterize`, which both want `u8`.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct HudColors {
-    pub background: (u8, u8, u8),
-    pub foreground: (u8, u8, u8),
-    pub accent: (u8, u8, u8),
-}
-
-impl HudColors {
-    /// What every HUD element already looked like before this chunk — flat black panels,
-    /// flat white text/borders, and the credits panel's own hand-picked light blue for its
-    /// "Accent" text colour (`(0.55, 0.85, 1.0)`, unchanged in meaning here). Used whenever
-    /// `read_hud_colors` can't get a real answer, so behaviour off Omarchy (or if the
-    /// resolver script is ever missing) is unchanged from every prior phase.
-    pub const FALLBACK: Self = Self { background: (0, 0, 0), foreground: (255, 255, 255), accent: (140, 217, 255) };
 }
 
 /// Reads `background`/`foreground`/`accent` from the active Omarchy theme, the same

@@ -20,9 +20,9 @@ Every decal, tool icon, sprite and cursor is **generated procedurally at runtime
 
 ### JetBrains Mono
 
-- Files: `hakai/assets/fonts/JetBrainsMono-Regular.ttf`, `hakai/assets/fonts/JetBrainsMono-Bold.ttf`
+- Files: `hakai-core/assets/fonts/JetBrainsMono-Regular.ttf`, `hakai-core/assets/fonts/JetBrainsMono-Bold.ttf`
 - Source: Google Fonts — https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbY2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKxjPQ.ttf (regular), .../tDbY2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8L6tjPQ.ttf (bold)
-- License: SIL Open Font License 1.1 — full text in `hakai/assets/fonts/JetBrainsMono-OFL.txt`
+- License: SIL Open Font License 1.1 — full text in `hakai-core/assets/fonts/JetBrainsMono-OFL.txt`
 - Copyright 2020 The JetBrains Mono Project Authors (github.com/JetBrains/JetBrainsMono)
 - Used for: the whole HUD — tool-name label, toast, palette digits/readout, credits panel — standing in for the macOS build's `NSFont.monospacedSystemFont`
 

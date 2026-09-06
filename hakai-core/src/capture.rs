@@ -1,6 +1,9 @@
-//! Screen capture — `zwlr_screencopy_v1`, for the brightness-driven impact sound.
+//! Screen capture — the brightness grid + snapshot conversion behind the brightness-driven
+//! impact sound. Platform-agnostic pixel math only: each binary owns the actual capture
+//! backend that feeds it (`zwlr_screencopy_v1` on Wayland, DXGI Desktop Duplication on
+//! Windows) and hands the raw frame bytes to [`BrightnessMap::update`] / [`to_rgba`].
 //!
-//! `hakai_core::audio::smash_name` (ported since Phase 3) already picks a hollow/wooden
+//! `crate::audio::smash_name` (ported since Phase 3) already picks a hollow/wooden
 //! vs. glassy/metallic impact variant from `brightness: Option<u8>` — but every
 //! `ToolContext` in this port has passed `None` for it, since there was nothing to sample
 //! from before now, which falls back to a random variant instead of one actually driven
@@ -15,13 +18,10 @@
 //! desktop underneath rarely changes fast enough for that to matter, and it would be a lot
 //! of needless `zwlr_screencopy_v1` traffic and SHM copying otherwise.
 //!
-//! **The actual `zwlr_screencopy_v1` request/event dance and the SHM buffer plumbing live
-//! in `main.rs`**, alongside every other `Dispatch` impl `State` has, including the
-//! per-output capture state itself (inferred from a couple of `Option` fields on
-//! `GpuLayer` — `None` frame means idle, a frame but no buffer info means awaiting it,
-//! both `Some` means a copy is in flight — rather than a separate enum here) — this
-//! module is deliberately just the brightness grid, which doesn't need to know anything
-//! about Wayland at all.
+//! The actual `zwlr_screencopy_v1` request/event dance and SHM buffer plumbing live in
+//! `hakai`'s `main.rs` (alongside its other `Dispatch` impls); `hakai-win` drives DXGI
+//! Desktop Duplication from `duplication.rs`. This module is deliberately just the
+//! brightness grid and the snapshot byte-swap — it doesn't know anything about either.
 
 /// How often a fresh capture is requested per output, in seconds.
 pub const CAPTURE_INTERVAL: f32 = 2.0;

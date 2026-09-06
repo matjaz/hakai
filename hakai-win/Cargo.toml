@@ -18,20 +18,17 @@ strip = true
 # The headless core — the damage layer, all nine tools, decal/icon/sprite generators, the
 # termite colony, particles, HUD/credits logic. Identical to what the Linux binary depends
 # on; nothing in it is platform-specific.
-hakai-core = { path = "../hakai-core" }
-# hakai-core's own raster dep, pinned to match — render.rs / text.rs name `tiny_skia`
-# types directly.
-tiny-skia = "0.11"
+# The renderer and scene now live in hakai-core behind the `render` feature — this crate
+# is down to the window, the event loop and the DXGI capture backend.
+hakai-core = { path = "../hakai-core", features = ["render"] }
 
-# Phase 0 found wgpu 22's D3D12 backend only offers CompositeAlphaMode::Opaque on a plain
-# HWND. wgpu 27+ added Dx12SwapchainKind::DxgiFromVisual (a DirectComposition presentation
-# path) which does support transparency, so the Windows build tracks modern wgpu rather
-# than the Linux binary's pinned 22. The ~1000 lines of render code are ported here
-# against wgpu 30 rather than #[path]-shared; WINDOWS-PLAN.md Phase 7 unifies them later.
+# wgpu 30: Phase 0 found wgpu 22's D3D12 backend only offers CompositeAlphaMode::Opaque on
+# a plain HWND; wgpu 27+ added Dx12SwapchainKind::DxgiFromVisual (a DirectComposition
+# presentation path) which does support transparency. The Linux binary was bumped to match.
+# Only the instance/adapter/device/surface setup names wgpu here now.
 wgpu = "30"
 raw-window-handle = "0.6"
 pollster = "0.3"
-bytemuck = { version = "1", features = ["derive"] }
 
 env_logger = "0.11"
 log = "0.4"
@@ -39,9 +36,8 @@ log = "0.4"
 # The window + event loop, replacing smithay-client-toolkit + calloop.
 winit = "0.30"
 
-# HUD text shaping — same crate and version the Linux binary's text.rs uses (which this
-# crate #[path]-includes verbatim).
-cosmic-text = "0.12"
+# HUD text shaping (`cosmic-text`) now comes from `hakai_core::render::text` via the
+# `render` feature above — no direct dep here any more.
 
 # Real audio — same as the Linux binary's audio.rs (also #[path]-included verbatim).
 # cpal picks the WASAPI host on Windows; hound decodes the bundled WAVs.

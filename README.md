@@ -120,11 +120,13 @@ cargo run  --release --manifest-path hakai-win/Cargo.toml   # run it
 powershell -File hakai-win/package.ps1                       # build the release zip
 ```
 
-Unlike the Linux binary, `hakai-win` tracks modern `wgpu` (30, not 22): wgpu 22's D3D12
+Both binaries build against `wgpu` 30 (the Windows side forced the bump — wgpu 22's D3D12
 backend can't present a per-pixel-alpha surface to a plain window, and the
-`DirectComposition` path that can only landed later. The ~1000 lines of shared render code
-are duplicated across the two binaries for now rather than `#[cfg]`-split; unifying them
-into `hakai-core` (and bumping the Linux side to wgpu 30) is a later step.
+`DirectComposition` path that can only landed later; the Linux side followed). The renderer
+and the whole per-output scene live in `hakai_core::render`, behind the crate's
+off-by-default `render` feature; each binary is just its window, its event loop and its
+screen-capture backend (`zwlr_screencopy_v1` on Wayland, DXGI Desktop Duplication on
+Windows).
 
 See `WINDOWS-PORT.md` (analysis) and `WINDOWS-PLAN.md` (the phased build log) for the full
 story.

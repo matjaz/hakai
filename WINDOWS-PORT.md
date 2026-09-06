@@ -190,6 +190,10 @@ The awkwardness is the ~1,600 lines the two binaries would share — wgpu pipeli
   platform-specific crate; only their *host* is platform-specific, and that is chosen at
   runtime rather than in the source.
 
+**Done** (Phase 7, PRs #2–#4): the duplicate-first shortcut was taken to ship the port,
+then the second option was carried out — `hakai_core::render` now owns the renderer,
+`Scene` / `GpuLayer`, HUD text and `HudColors`; `audio.rs` alone stayed `#[path]`-included.
+
 Prefer the second. It shrinks `hakai-win` to roughly the size of the problem it actually
 represents.
 
