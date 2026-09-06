@@ -10,3 +10,4 @@
 //! job) never compiles wgpu or cosmic-text.
 
 pub mod text;
+pub mod theme;
