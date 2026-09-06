@@ -17,7 +17,7 @@ path = "src/lib.rs"
 # headless CI job) stay exactly as light as before: no wgpu, no cosmic-text. The two
 # binaries (`hakai`, `hakai-win`) turn it on; each still owns its own window, event loop
 # and screen-capture backend.
-render = ["dep:wgpu", "dep:bytemuck", "dep:cosmic-text", "dep:raw-window-handle"]
+render = ["dep:wgpu", "dep:bytemuck", "dep:cosmic-text", "dep:raw-window-handle", "dep:log"]
 
 [dependencies]
 # If cargo can't resolve this (a breaking 0.12+ is out and old 0.11.x got yanked, which
@@ -43,3 +43,4 @@ bytemuck = { version = "1", features = ["derive"], optional = true }
 # rather than the hand-traced glyph outlines `fonts.rs` uses for the stamp decal. See
 # src/render/text.rs for the version RISK notes carried over from the port.
 cosmic-text = { version = "0.12", optional = true }
+log = { version = "0.4", optional = true }

@@ -2,15 +2,19 @@
 //!
 //! Phase 0: a transparent, borderless, always-on-top overlay per monitor (needs
 //! `Dx12SwapchainKind::DxgiFromVisual` + `WS_EX_NOREDIRECTIONBITMAP` — see
-//! `WINDOWS-PLAN.md`). Phase 2: keyboard + pointer into `state::State`, the scene ported
-//! from the Linux binary, and `render::render` per output per frame. Phase 4: DXGI
-//! Desktop Duplication feeds the brightness map. Phase 5: one window per monitor, each
-//! with its own Per-Monitor-DPI-v2 scale factor.
+//! `WINDOWS-PLAN.md`). Phase 2: keyboard + pointer into `hakai_core::render::Scene`, and
+//! `hakai_core::render::render` per output per frame. Phase 4: DXGI Desktop Duplication
+//! feeds the brightness map. Phase 5: one window per monitor, each with its own
+//! Per-Monitor-DPI-v2 scale factor.
+//!
+//! Everything below the window/event-loop/capture-backend line lives in
+//! `hakai_core::render` now — the same code the Linux binary runs.
 //!
 //! Esc quits. `HAKAI_WINDOWED=1` forces a single small ordinary window (for boxes whose
 //! reported monitor geometry doesn't match the presentable area, e.g. some RDP sessions).
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use winit::application::ApplicationHandler;
 use winit::event::{ElementState, MouseButton, WindowEvent};
@@ -22,26 +26,23 @@ use winit::window::{Window, WindowId, WindowLevel};
 
 use hakai_core::audio::AudioSink;
 use hakai_core::icons::ToolIcons;
+use hakai_core::render::{Assets, Scene};
 use hakai_core::sprites::SpriteFactory;
 use hakai_core::tools::ToolId;
 use hakai_core::DecalFactory;
 
 mod duplication;
-mod render;
-mod state;
 mod theme;
 mod win32;
 
 #[path = "../../hakai/src/audio.rs"]
 mod audio;
 
-// The renderer, HUD text shaping, and the Wayland-free brightness grid + snapshot
-// conversion all live in `hakai_core` now (behind its `render` feature). Only the
+// The renderer, HUD text shaping, scene state, and the Wayland-free brightness grid +
+// snapshot conversion all live in `hakai_core` now (behind its `render` feature). Only the
 // producer of the brightness grid is ours — `duplication::DesktopDuplication` (DXGI
 // Desktop Duplication).
-use hakai_core::capture;
 use hakai_core::render::text::TextRenderer;
-use state::State;
 
 fn build_instance() -> wgpu::Instance {
     let mut desc = wgpu::InstanceDescriptor::new_without_display_handle_from_env();
@@ -80,18 +81,43 @@ enum UserEvent {
     Quit,
 }
 
+/// winit's `inner_size()` is physical pixels; the scene works in points. One divide, here.
+fn logical_size(w: &Window) -> (u32, u32) {
+    let scale = (w.scale_factor() as f32).max(0.01);
+    let size = w.inner_size();
+    (
+        ((size.width as f32 / scale).round() as u32).max(1),
+        ((size.height as f32 / scale).round() as u32).max(1),
+    )
+}
+
 #[derive(Default)]
 struct App {
     instance: Option<wgpu::Instance>,
     adapter: Option<wgpu::Adapter>,
     windows: Vec<Arc<Window>>,
-    state: Option<State>,
+    /// `WindowId` for each `scene.layers[i]`, same order — this binary's key→index map.
+    window_ids: Vec<WindowId>,
+    scene: Option<Scene>,
+
+    /// DXGI Desktop Duplication of the **primary** output — `None` when unavailable
+    /// (hybrid graphics, RDP, another duplicator already running); tools then fall back to
+    /// a random impact-sound variant. A secondary monitor's brightness is sampled from the
+    /// primary's capture — no worse than the random fallback; per-output duplication later.
+    duplication: Option<duplication::DesktopDuplication>,
+    /// `None` until the first capture, so the brightness map is populated on frame 1.
+    last_capture: Option<Instant>,
+
     modifiers: ModifiersState,
     /// Last cursor position, in the focused layer's point space.
     cursor: (f32, f32),
 }
 
 impl App {
+    fn layer_index(&self, id: WindowId) -> Option<usize> {
+        self.window_ids.iter().position(|w| *w == id)
+    }
+
     fn init(&mut self, event_loop: &ActiveEventLoop) {
         // Primary monitor first, then the rest — so layer 0 is the primary output, which
         // is the one DXGI Desktop Duplication captures.
@@ -154,9 +180,8 @@ impl App {
         let mut sprites = SpriteFactory::new();
         let mut text = TextRenderer::new();
 
-        let w0 = &self.windows[0];
-        let w0_points = w0.inner_size().width as f32 / w0.scale_factor() as f32;
-        let assets = render::Assets::build(
+        let w0_points = logical_size(&self.windows[0]).0 as f32;
+        let assets = Assets::build(
             device, queue, format, &mut icons, &mut sprites, &mut decals, &mut text, hud_colors, w0_points,
         );
 
@@ -171,7 +196,7 @@ impl App {
             }
         };
 
-        let mut st = State {
+        let mut scene = Scene {
             assets,
             decals,
             icons,
@@ -179,29 +204,57 @@ impl App {
             text,
             audio,
             layers: Vec::new(),
-            duplication: duplication::DesktopDuplication::new(),
-            last_capture: None,
             focused_layer: None,
             shift_held: false,
         };
 
         // First layer reuses surface0; the rest make their own from the same instance.
-        st.add_window_layer(
-            self.windows[0].id(),
-            surface0,
-            &adapter,
-            self.windows[0].inner_size().into(),
-            self.windows[0].scale_factor() as f32,
-        );
+        scene.add_layer(surface0, &adapter, logical_size(&self.windows[0]), self.windows[0].scale_factor() as f32);
+        self.window_ids.push(self.windows[0].id());
         for w in self.windows.iter().skip(1) {
             let surface = instance.create_surface(w.clone()).expect("create_surface");
-            st.add_window_layer(w.id(), surface, &adapter, w.inner_size().into(), w.scale_factor() as f32);
+            scene.add_layer(surface, &adapter, logical_size(w), w.scale_factor() as f32);
+            self.window_ids.push(w.id());
         }
-        st.select_tool(ToolId::Hammer);
+        scene.select_tool(ToolId::Hammer);
 
+        self.duplication = duplication::DesktopDuplication::new();
         self.instance = Some(instance);
         self.adapter = Some(adapter);
-        self.state = Some(st);
+        self.scene = Some(scene);
+    }
+
+    /// Requests a fresh desktop capture if one is due (every `CAPTURE_INTERVAL`, or the
+    /// moment a frozen output still lacks its snapshot) and feeds it to every output.
+    fn capture_tick(&mut self) {
+        if self.duplication.is_none() || self.scene.is_none() {
+            return;
+        }
+        let now = Instant::now();
+        let due = {
+            let scene = self.scene.as_ref().unwrap();
+            match self.last_capture {
+                None => true,
+                Some(t) => {
+                    scene.wants_snapshot()
+                        || now.duration_since(t).as_secs_f32() >= hakai_core::capture::CAPTURE_INTERVAL
+                }
+            }
+        };
+        if !due {
+            return;
+        }
+        self.last_capture = Some(now);
+
+        let scene = self.scene.as_mut().unwrap();
+        let dupl = self.duplication.as_mut().unwrap();
+        let got = dupl.capture(|bytes, w, h, stride| {
+            scene.feed_capture_all(bytes, w, h, stride);
+            (w, h)
+        });
+        if let Some((w, h)) = got {
+            log::trace!("desktop capture {w}x{h}");
+        }
     }
 }
 
@@ -222,20 +275,25 @@ impl ApplicationHandler<UserEvent> for App {
         // Drive the whole scene from here rather than per-window RedrawRequested: capture,
         // audio and advance must run once per frame total, and `get_current_texture`'s
         // vsync wait inside `render` self-throttles the loop to the refresh rate.
-        if let Some(st) = self.state.as_mut() {
-            st.frame();
+        self.capture_tick();
+        if let Some(scene) = self.scene.as_mut() {
+            scene.frame();
         }
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
-        // Plain f32 copy — taken before `st` borrows `self` mutably.
+        // Plain copies taken before `scene` borrows `self` mutably.
         let win_scale = self.windows.iter().find(|w| w.id() == id).map(|w| w.scale_factor() as f32);
-        let Some(st) = self.state.as_mut() else { return };
+        let idx = self.layer_index(id);
+        let Some(scene) = self.scene.as_mut() else { return };
 
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Destroyed => {
-                st.remove_window_layer(id);
+                if let Some(idx) = idx {
+                    scene.remove_layer(idx);
+                    self.window_ids.remove(idx);
+                }
                 self.windows.retain(|w| w.id() != id);
                 if self.windows.is_empty() {
                     event_loop.exit();
@@ -244,7 +302,7 @@ impl ApplicationHandler<UserEvent> for App {
 
             WindowEvent::ModifiersChanged(m) => {
                 self.modifiers = m.state();
-                st.shift_held = self.modifiers.contains(ModifiersState::SHIFT);
+                scene.shift_held = self.modifiers.contains(ModifiersState::SHIFT);
             }
 
             WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed => {
@@ -252,69 +310,73 @@ impl ApplicationHandler<UserEvent> for App {
                 let shift = self.modifiers.contains(ModifiersState::SHIFT);
                 match code {
                     KeyCode::Escape => event_loop.exit(),
-                    KeyCode::Digit1 => st.select_tool(ToolId::Hammer),
-                    KeyCode::Digit2 => st.select_tool(ToolId::ChainSaw),
-                    KeyCode::Digit3 => st.select_tool(ToolId::MachineGun),
-                    KeyCode::Digit4 => st.select_tool(ToolId::FlameThrower),
-                    KeyCode::Digit5 => st.select_tool(ToolId::ColorThrower),
-                    KeyCode::Digit6 => st.select_tool(ToolId::Phaser),
-                    KeyCode::Digit7 => st.select_tool(ToolId::Stamp),
-                    KeyCode::Digit8 => st.select_tool(ToolId::Termites),
-                    KeyCode::Digit9 => st.select_tool(ToolId::Washer),
-                    KeyCode::KeyR => st.erase_all(),
+                    KeyCode::Digit1 => scene.select_tool(ToolId::Hammer),
+                    KeyCode::Digit2 => scene.select_tool(ToolId::ChainSaw),
+                    KeyCode::Digit3 => scene.select_tool(ToolId::MachineGun),
+                    KeyCode::Digit4 => scene.select_tool(ToolId::FlameThrower),
+                    KeyCode::Digit5 => scene.select_tool(ToolId::ColorThrower),
+                    KeyCode::Digit6 => scene.select_tool(ToolId::Phaser),
+                    KeyCode::Digit7 => scene.select_tool(ToolId::Stamp),
+                    KeyCode::Digit8 => scene.select_tool(ToolId::Termites),
+                    KeyCode::Digit9 => scene.select_tool(ToolId::Washer),
+                    KeyCode::KeyR => scene.erase_all(),
                     // Windows reports Shift+Tab as Tab with the shift modifier — no
                     // ISO_Left_Tab equivalent, so one branch covers both directions.
-                    KeyCode::Tab => st.cycle_tool(if shift { -1 } else { 1 }),
-                    KeyCode::ArrowUp => st.set_palette_visible(true),
-                    KeyCode::ArrowDown => st.set_palette_visible(false),
-                    KeyCode::KeyC => st.toggle_credits(),
-                    KeyCode::KeyM => st.toggle_mode(),
+                    KeyCode::Tab => scene.cycle_tool(if shift { -1 } else { 1 }),
+                    KeyCode::ArrowUp => scene.set_palette_visible(true),
+                    KeyCode::ArrowDown => scene.set_palette_visible(false),
+                    KeyCode::KeyC => scene.toggle_credits(),
+                    KeyCode::KeyM => scene.toggle_mode(),
                     _ => {}
                 }
             }
 
             WindowEvent::CursorEntered { .. } => {
-                st.focused_layer = st.layer_index(id);
+                scene.focused_layer = idx;
             }
             WindowEvent::CursorLeft { .. } => {
-                if st.focused_layer == st.layer_index(id) {
-                    st.focused_layer = None;
+                if scene.focused_layer == idx {
+                    scene.focused_layer = None;
                 }
             }
             WindowEvent::CursorMoved { position, .. } => {
-                let Some(idx) = st.layer_index(id) else { return };
-                // winit gives physical pixels, y down from the top-left. The scene works
-                // in points — divide by this output's scale once, here, and nowhere else.
-                let scale = st.layers[idx].scale.max(0.01);
+                let Some(idx) = idx else { return };
+                let scale = scene.layers[idx].scale.max(0.01);
                 self.cursor = (position.x as f32 / scale, position.y as f32 / scale);
-                st.focused_layer = Some(idx);
-                st.pointer_moved(idx, self.cursor);
+                scene.focused_layer = Some(idx);
+                scene.pointer_moved(idx, self.cursor);
             }
             WindowEvent::MouseInput { state: ElementState::Pressed, button: MouseButton::Left, .. } => {
-                if let Some(idx) = st.layer_index(id) {
-                    st.pointer_pressed(idx, self.cursor);
+                if let Some(idx) = idx {
+                    scene.pointer_pressed(idx, self.cursor);
                 }
             }
             WindowEvent::MouseInput { state: ElementState::Released, button: MouseButton::Left, .. } => {
-                if let Some(idx) = st.layer_index(id) {
-                    st.pointer_released(idx, self.cursor);
+                if let Some(idx) = idx {
+                    scene.pointer_released(idx, self.cursor);
                 }
             }
 
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
-                if let Some(idx) = st.layer_index(id) {
+                if let Some(idx) = idx {
                     // The matching Resized event does the reconfigure; just record the
                     // new scale so it's current when that arrives.
-                    st.layers[idx].scale = scale_factor as f32;
+                    scene.layers[idx].scale = scale_factor as f32;
                 }
             }
             WindowEvent::Resized(size) => {
                 if size.width == 0 || size.height == 0 {
                     return;
                 }
-                let Some(idx) = st.layer_index(id) else { return };
-                let scale = win_scale.unwrap_or(st.layers[idx].scale);
-                st.layers[idx].resize((size.width, size.height), scale, &st.assets);
+                let Some(idx) = idx else { return };
+                let scale = win_scale.unwrap_or(scene.layers[idx].scale).max(0.01);
+                let logical = (
+                    ((size.width as f32 / scale).round() as u32).max(1),
+                    ((size.height as f32 / scale).round() as u32).max(1),
+                );
+                // Split borrow: `resize` needs `&layers[idx]` and `&assets` at once.
+                let assets = &scene.assets;
+                scene.layers[idx].resize(logical, scale, assets);
             }
 
             _ => {}
