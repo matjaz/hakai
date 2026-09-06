@@ -1,0 +1,44 @@
+[package]
+name = "hakai-win"
+version = "0.0.1"
+edition = "2021"
+description = "Smash, burn and repaint your desktop — the Windows build of hakai."
+license = "MIT"
+repository = "https://github.com/matjaz/hakai"
+readme = "../README.md"
+
+[[bin]]
+name = "hakai-win"
+path = "src/main.rs"
+
+[profile.release]
+strip = true
+
+[dependencies]
+# Phase 0 found wgpu 22's D3D12 backend only offers CompositeAlphaMode::Opaque on a plain
+# HWND — no per-pixel alpha, which an overlay needs. wgpu 27+ added a DirectComposition
+# presentation path (Dx12SwapchainKind::DxgiFromVisual) that does support transparency, so
+# the Windows build tracks modern wgpu rather than the Linux binary's pinned 22. Sharing
+# the render code again (WINDOWS-PLAN.md Phase 7) will mean bumping the Linux side too.
+wgpu = "30"
+raw-window-handle = "0.6"
+pollster = "0.3"
+bytemuck = { version = "1", features = ["derive"] }
+env_logger = "0.11"
+log = "0.4"
+
+# The window + event loop, replacing smithay-client-toolkit + calloop. 0.30 is the
+# ApplicationHandler-era API and speaks raw-window-handle 0.6, matching wgpu 22.
+winit = "0.30"
+
+# Win32 escape hatches: the WS_EX_LAYERED fallback if DWM per-pixel alpha doesn't come
+# through a plain wgpu swapchain (see the RISK note in WINDOWS-PLAN.md Phase 0), and later
+# DXGI Desktop Duplication for screen capture.
+# Matches the copy wgpu-hal 30 pulls in, so there's one unified `windows` in the tree.
+[dependencies.windows]
+version = "0.62"
+features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Graphics_Gdi",
+]
