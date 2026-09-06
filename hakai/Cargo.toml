@@ -49,7 +49,11 @@ wayland-client = "0.31"
 calloop = "0.13"
 calloop-wayland-source = "0.3"
 
-wgpu = "22"
+# wgpu 30 — matched to the Windows binary (`hakai-win`), which needed 27+ for its
+# DirectComposition transparency path. Unifying on one major is the prerequisite for
+# sharing the render code through `hakai-core` (WINDOWS-PLAN.md Phase 7); this crate was
+# on a pinned 22 until that unification became worth doing.
+wgpu = "30"
 raw-window-handle = "0.6"
 pollster = "0.3"
 # POD → bytes for the per-tile uniform buffer (tile placement, already converted to clip

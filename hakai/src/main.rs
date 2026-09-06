@@ -156,9 +156,12 @@ fn main() {
     // at least one real run, which then failed creating an EGL context outright
     // (`eglCreateContext` → `EGL_BAD_MATCH`). Vulkan via Mesa is what the plan always
     // targeted for Omarchy anyway.
-    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-        backends: wgpu::Backends::VULKAN,
-        ..Default::default()
+    // wgpu 30: `InstanceDescriptor` is no longer `Default` — build it from the
+    // env-aware constructor, then pin the backend (same pattern as `hakai-win`).
+    let instance = wgpu::Instance::new({
+        let mut desc = wgpu::InstanceDescriptor::new_without_display_handle_from_env();
+        desc.backends = wgpu::Backends::VULKAN;
+        desc
     });
 
     // Audio is optional — `AudioEngine.swift`'s own doc comment: "if `AVAudioEngine`
@@ -353,15 +356,13 @@ fn upload_dirty_tiles(queue: &wgpu::Queue, gpu: &mut GpuLayer) {
     }
     for i in dirty {
         let (Some((pixels, w, h)), Some(tile)) = (damage.tile_pixels(i), gpu.tiles.get(i)) else { continue };
-        // RISK: `wgpu` renamed these copy-destination/layout types (`ImageCopyTexture` →
-        // `TexelCopyTextureInfo`, `ImageDataLayout` → `TexelCopyBufferLayout`) at some
-        // point in its history close to the version pinned here (`wgpu = "22"`). If this
-        // doesn't compile, that rename is almost certainly why — try the `TexelCopy*`
-        // names instead.
+        // `wgpu` renamed these copy-destination/layout types (`ImageCopyTexture` →
+        // `TexelCopyTextureInfo`, `ImageDataLayout` → `TexelCopyBufferLayout`) in the 22→30
+        // window this crate now tracks; the `TexelCopy*` names are current.
         queue.write_texture(
-            wgpu::ImageCopyTexture { texture: &tile.texture, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+            wgpu::TexelCopyTextureInfo { texture: &tile.texture, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
             pixels,
-            wgpu::ImageDataLayout { offset: 0, bytes_per_row: Some(4 * w), rows_per_image: Some(h) },
+            wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(4 * w), rows_per_image: Some(h) },
             wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
         );
     }
@@ -407,9 +408,9 @@ fn create_icon_gpu(device: &wgpu::Device, queue: &wgpu::Queue, layout: &wgpu::Bi
         view_formats: &[],
     });
     queue.write_texture(
-        wgpu::ImageCopyTexture { texture: &texture, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+        wgpu::TexelCopyTextureInfo { texture: &texture, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
         pixmap.data(),
-        wgpu::ImageDataLayout { offset: 0, bytes_per_row: Some(4 * w), rows_per_image: Some(h) },
+        wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(4 * w), rows_per_image: Some(h) },
         wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
     );
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -456,9 +457,9 @@ fn create_sprite_texture(device: &wgpu::Device, queue: &wgpu::Queue, pixmap: &ti
         view_formats: &[],
     });
     queue.write_texture(
-        wgpu::ImageCopyTexture { texture: &texture, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+        wgpu::TexelCopyTextureInfo { texture: &texture, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
         pixmap.data(),
-        wgpu::ImageDataLayout { offset: 0, bytes_per_row: Some(4 * w), rows_per_image: Some(h) },
+        wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(4 * w), rows_per_image: Some(h) },
         wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
     );
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -481,9 +482,9 @@ fn create_texture_from_rgba(device: &wgpu::Device, queue: &wgpu::Queue, rgba: &[
         view_formats: &[],
     });
     queue.write_texture(
-        wgpu::ImageCopyTexture { texture: &texture, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+        wgpu::TexelCopyTextureInfo { texture: &texture, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
         rgba,
-        wgpu::ImageDataLayout { offset: 0, bytes_per_row: Some(4 * width), rows_per_image: Some(height) },
+        wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(4 * width), rows_per_image: Some(height) },
         wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
     );
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -998,50 +999,50 @@ fn create_pipelines(device: &wgpu::Device, format: wgpu::TextureFormat) -> Pipel
     let tile_bind_group_layout = uniform_texture_sampler_layout(device, "tile-bind-group-layout");
     let sprite_bind_group_layout = uniform_texture_sampler_layout(device, "sprite-bind-group-layout");
 
-    // At `wgpu = "22"`, `entry_point` is a bare `&str`, not `Option<&str>` — confirmed by
-    // the compiler, not a guess (a later wgpu did move it to `Option`; that rename just
-    // hasn't landed at this pinned version).
+    // wgpu 30: `entry_point` is `Option<&str>`; `bind_group_layouts` entries are
+    // `Option<&_>`; `push_constant_ranges` became `immediate_size`; `multiview` on the
+    // pipeline descriptor became `multiview_mask`.
     let tile_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("tile-pipeline-layout"),
-        bind_group_layouts: &[&tile_bind_group_layout],
-        push_constant_ranges: &[],
+        bind_group_layouts: &[Some(&tile_bind_group_layout)],
+        immediate_size: 0,
     });
     let tile = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("tile-pipeline"),
         layout: Some(&tile_pipeline_layout),
-        vertex: wgpu::VertexState { module: &shader, entry_point: "vs_main", buffers: &[], compilation_options: wgpu::PipelineCompilationOptions::default() },
+        vertex: wgpu::VertexState { module: &shader, entry_point: Some("vs_main"), buffers: &[], compilation_options: wgpu::PipelineCompilationOptions::default() },
         fragment: Some(wgpu::FragmentState {
             module: &shader,
-            entry_point: "fs_main",
+            entry_point: Some("fs_main"),
             targets: &[Some(wgpu::ColorTargetState { format, blend: Some(wgpu::BlendState::ALPHA_BLENDING), write_mask: wgpu::ColorWrites::ALL })],
             compilation_options: wgpu::PipelineCompilationOptions::default(),
         }),
         primitive: wgpu::PrimitiveState::default(),
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
-        multiview: None,
+        multiview_mask: None,
         cache: None,
     });
 
     let sprite_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("sprite-pipeline-layout"),
-        bind_group_layouts: &[&sprite_bind_group_layout],
-        push_constant_ranges: &[],
+        bind_group_layouts: &[Some(&sprite_bind_group_layout)],
+        immediate_size: 0,
     });
     let sprite = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("sprite-pipeline"),
         layout: Some(&sprite_pipeline_layout),
-        vertex: wgpu::VertexState { module: &shader, entry_point: "vs_sprite", buffers: &[], compilation_options: wgpu::PipelineCompilationOptions::default() },
+        vertex: wgpu::VertexState { module: &shader, entry_point: Some("vs_sprite"), buffers: &[], compilation_options: wgpu::PipelineCompilationOptions::default() },
         fragment: Some(wgpu::FragmentState {
             module: &shader,
-            entry_point: "fs_sprite",
+            entry_point: Some("fs_sprite"),
             targets: &[Some(wgpu::ColorTargetState { format, blend: Some(wgpu::BlendState::ALPHA_BLENDING), write_mask: wgpu::ColorWrites::ALL })],
             compilation_options: wgpu::PipelineCompilationOptions::default(),
         }),
         primitive: wgpu::PrimitiveState::default(),
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
-        multiview: None,
+        multiview_mask: None,
         cache: None,
     });
 
@@ -1058,17 +1059,17 @@ fn create_pipelines(device: &wgpu::Device, format: wgpu::TextureFormat) -> Pipel
     let sprite_additive = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("sprite-additive-pipeline"),
         layout: Some(&sprite_pipeline_layout),
-        vertex: wgpu::VertexState { module: &shader, entry_point: "vs_sprite", buffers: &[], compilation_options: wgpu::PipelineCompilationOptions::default() },
+        vertex: wgpu::VertexState { module: &shader, entry_point: Some("vs_sprite"), buffers: &[], compilation_options: wgpu::PipelineCompilationOptions::default() },
         fragment: Some(wgpu::FragmentState {
             module: &shader,
-            entry_point: "fs_sprite",
+            entry_point: Some("fs_sprite"),
             targets: &[Some(wgpu::ColorTargetState { format, blend: Some(additive_blend), write_mask: wgpu::ColorWrites::ALL })],
             compilation_options: wgpu::PipelineCompilationOptions::default(),
         }),
         primitive: wgpu::PrimitiveState::default(),
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
-        multiview: None,
+        multiview_mask: None,
         cache: None,
     });
 
@@ -1472,6 +1473,7 @@ impl State {
                     power_preference: wgpu::PowerPreference::LowPower,
                     compatible_surface: Some(&wgpu_surface),
                     force_fallback_adapter: false,
+                    ..Default::default()
                 },
             ))
             .expect("no wgpu adapter compatible with the layer surface");
@@ -1494,8 +1496,9 @@ impl State {
                     required_features: wgpu::Features::empty(),
                     required_limits: adapter.limits(),
                     memory_hints: wgpu::MemoryHints::default(),
+                    experimental_features: wgpu::ExperimentalFeatures::disabled(),
+                    trace: wgpu::Trace::Off,
                 },
-                None,
             ))
             .expect("failed to acquire a wgpu device");
 
@@ -1808,7 +1811,16 @@ impl State {
             queue.write_buffer(cursor_uniform, 0, bytemuck::bytes_of(&ndc));
         }
 
-        let Ok(frame) = gpu.wgpu_surface.get_current_texture() else { return };
+        // wgpu 30: `get_current_texture` returns a `CurrentSurfaceTexture` enum rather than
+        // a `Result`. Anything but a usable frame — the surface is stale after a resize the
+        // reconfigure hasn't caught up with — is skipped; the next frame gets a fresh one.
+        let frame = match gpu.wgpu_surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(f) | wgpu::CurrentSurfaceTexture::Suboptimal(f) => f,
+            other => {
+                log::debug!("get_current_texture: {other:?} — skipping frame");
+                return;
+            }
+        };
         let view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
@@ -1820,6 +1832,7 @@ impl State {
                 label: Some("hakai-frame"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
+                    depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
@@ -1829,6 +1842,7 @@ impl State {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
             // Frozen mode's background — the captured snapshot, drawn first (so
             // everything else layers on top of it, same as the real, live desktop
@@ -2057,7 +2071,8 @@ impl State {
             }
         }
         queue.submit(Some(encoder.finish()));
-        frame.present();
+        // wgpu 30: presentation moved from `SurfaceTexture::present` to `Queue::present`.
+        queue.present(frame);
     }
 }
 
@@ -2252,6 +2267,7 @@ impl LayerShellHandler for State {
                     .copied()
                     .find(|m| *m == wgpu::CompositeAlphaMode::PreMultiplied)
                     .unwrap_or(caps.alpha_modes[0]),
+                color_space: wgpu::SurfaceColorSpace::Auto,
                 view_formats: vec![],
                 desired_maximum_frame_latency: 2,
             },
@@ -2938,6 +2954,7 @@ impl Dispatch<wp_fractional_scale_v1::WpFractionalScaleV1, ()> for State {
                 height: buffer_height,
                 present_mode: wgpu::PresentMode::Fifo,
                 alpha_mode: caps.alpha_modes.iter().copied().find(|m| *m == wgpu::CompositeAlphaMode::PreMultiplied).unwrap_or(caps.alpha_modes[0]),
+                color_space: wgpu::SurfaceColorSpace::Auto,
                 view_formats: vec![],
                 desired_maximum_frame_latency: 2,
             },

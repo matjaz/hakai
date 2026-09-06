@@ -51,11 +51,12 @@ Plus `hakai-win/package.ps1` (release zip) and `hakai-win/README.txt` (end-user 
   `Dx12SwapchainKind::DxgiFromVisual` (a DirectComposition presentation path) which does
   support it. The HWND also needs `WS_EX_NOREDIRECTIONBITMAP` (winit's
   `with_no_redirection_bitmap`) or the DComp visual composites over an opaque backing.
-  So `hakai-win` tracks modern wgpu while `hakai` (Linux) stays on pinned 22.
-- **Render code is duplicated, not shared** (yet). The ~1000 lines of wgpu draw code can't
-  be `#[path]`-included across two binaries on different wgpu majors. Unifying them into
-  `hakai-core` behind a feature — and bumping the Linux binary to wgpu 30 — is Phase 7,
-  deferred.
+  The Windows side forced the bump; the Linux binary (`hakai`) has since followed, so both
+  now build against wgpu 30.
+- **Render code is duplicated, not shared** (yet). The ~1000 lines of wgpu draw code are
+  still copied into `hakai-win` (`render.rs` / `state.rs`) rather than `#[path]`-included
+  from `hakai/src/`. Now that both binaries are on the same wgpu major, lifting them into
+  `hakai-core` behind a feature is Phase 7 — still deferred, but no longer blocked.
 - **No assets to bundle.** Every font and all 35 sounds are `include_bytes!`'d at compile
   time (the Linux binary does this too) and nothing in `hakai-core` reads a file at
   runtime, so `hakai-win.exe` is fully self-contained — 13 MB, runs from anywhere. The
@@ -137,12 +138,14 @@ Everything else is polish; this is the actual "is it done" check.
 `hakai-win` and `hakai` share ~1,600 lines through the `#[path]` includes plus the
 duplicated `render.rs` / `state.rs`. Finish the job: lift `render.rs`, `state.rs`,
 `audio.rs` and `text.rs` into `hakai-core` behind a `render` feature, leaving each binary
-with only its window, its event loop and its capture backend. This **requires bumping the
-Linux binary to wgpu 30** — do that as its own commit, verify the Linux build still passes
-CI (that's the check that the wgpu bump was mechanical), then do the lift.
+with only its window, its event loop and its capture backend.
 
-Deferred by choice for now — keeping the Linux binary on its known-good wgpu 22 while the
-Windows side stabilises.
+The prerequisite — **bumping the Linux binary to wgpu 30** — is done: `hakai/Cargo.toml`
+tracks wgpu 30, `main.rs`'s call sites are migrated (`TexelCopy*` copy types, `Some(..)`
+entry points, `immediate_size`, `multiview_mask`, `CurrentSurfaceTexture`, `Queue::present`,
+`SurfaceColorSpace`), release build passes `--locked`, and it runs clean on Hyprland (two
+layer surfaces, steady frame loop, no wgpu validation warnings). The lift itself is still
+deferred by choice — but no longer blocked.
 
 ### 3. Per-monitor Desktop Duplication (small)
 
