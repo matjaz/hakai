@@ -27,7 +27,7 @@ strip = true
 # functional outcome (this crate can `use hakai_core::...`) with far less risk to two
 # already-working, separately-tested setups: no Cargo.lock merge, no target-dir path
 # changes on either side.
-hakai-core = { path = "../hakai-core" }
+hakai-core = { path = "../hakai-core", features = ["render"] }
 # hakai-core's own dependency, pinned to match — needed here too since main.rs names
 # `tiny_skia::Pixmap` directly (icon upload), and Rust won't let a crate reference a
 # transitive dependency's types without also depending on it.
@@ -63,14 +63,8 @@ bytemuck = { version = "1", features = ["derive"] }
 env_logger = "0.11"
 log = "0.4"
 
-# HUD text (the tool-name label, hint bar, palette digits, credits panel) — real font
-# shaping rather than the outline-tracing `ttf-parser` approach `hakai-core`'s stamp decal
-# uses, since HUD text is arbitrary strings (tool names, credits, licence text) rather than
-# a handful of known short words worth hand-building paths for. RISK: cosmic-text's
-# convenience API (`Buffer::draw`'s per-pixel callback, `FontSystem`'s constructors) has
-# shifted across its 0.1x releases in ways I can't verify without crates.io access to the
-# exact docs for whatever version resolves here — see the RISK comments in `text.rs`.
-cosmic-text = "0.12"
+# HUD text shaping (`cosmic-text`) now lives in `hakai_core::render::text`, pulled in by
+# the `render` feature on the hakai-core dependency above — no direct dep here any more.
 
 # Phase 5: real audio. `cpal` is a long-established, stable-API crate (unlike
 # `cosmic-text`) — higher confidence here than anywhere else new in this port, though

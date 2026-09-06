@@ -653,7 +653,6 @@ dependencies = [
  "bytemuck",
  "calloop",
  "calloop-wayland-source",
- "cosmic-text",
  "cpal",
  "env_logger",
  "hakai-core",
@@ -674,10 +673,14 @@ dependencies = [
 name = "hakai-core"
 version = "0.0.1"
 dependencies = [
+ "bytemuck",
+ "cosmic-text",
+ "raw-window-handle",
  "serde",
  "serde_json",
  "tiny-skia",
  "ttf-parser 0.24.1",
+ "wgpu",
 ]
 
 [[package]]

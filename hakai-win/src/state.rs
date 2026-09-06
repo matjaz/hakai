@@ -22,9 +22,9 @@ use hakai_core::sprites::SpriteFactory;
 use hakai_core::tools::{Tool, ToolContext, ToolId};
 use hakai_core::{DamageLayer, DecalFactory, SeededRng};
 
-use crate::capture::BrightnessMap;
+use hakai_core::capture::BrightnessMap;
 use crate::render::{Assets, ToastGpu, TileGpu};
-use crate::text::TextRenderer;
+use hakai_core::render::text::TextRenderer;
 
 /// One output — one monitor's window. `wgpu_surface`/`config`/`window_id` are the platform
 /// edge; every other field is the same per-output game state the Linux `GpuLayer` carries.
@@ -330,7 +330,7 @@ impl State {
         let want_snapshot = self.layers.iter().any(|l| l.frozen && l.snapshot_texture.is_none());
         let due = match self.last_capture {
             None => true,
-            Some(t) => want_snapshot || now.duration_since(t).as_secs_f32() >= crate::capture::CAPTURE_INTERVAL,
+            Some(t) => want_snapshot || now.duration_since(t).as_secs_f32() >= hakai_core::capture::CAPTURE_INTERVAL,
         };
         if !due {
             return;
@@ -343,7 +343,7 @@ impl State {
             for layer in layers.iter_mut() {
                 layer.brightness.update(bytes, w, h, stride);
                 if layer.frozen && layer.snapshot_texture.is_none() {
-                    let rgba = crate::capture::to_rgba(bytes, w, h, stride);
+                    let rgba = hakai_core::capture::to_rgba(bytes, w, h, stride);
                     layer.snapshot_texture = Some(crate::render::upload_snapshot(assets, &rgba, w, h));
                 }
             }

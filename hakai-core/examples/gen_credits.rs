@@ -67,9 +67,9 @@ const FONTS: &[Font] = &[
     },
     Font {
         name: "JetBrains Mono",
-        files: &["hakai/assets/fonts/JetBrainsMono-Regular.ttf", "hakai/assets/fonts/JetBrainsMono-Bold.ttf"],
+        files: &["hakai-core/assets/fonts/JetBrainsMono-Regular.ttf", "hakai-core/assets/fonts/JetBrainsMono-Bold.ttf"],
         source: "Google Fonts — https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbY2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKxjPQ.ttf (regular), .../tDbY2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8L6tjPQ.ttf (bold)",
-        license_file: "hakai/assets/fonts/JetBrainsMono-OFL.txt",
+        license_file: "hakai-core/assets/fonts/JetBrainsMono-OFL.txt",
         copyright: "2020 The JetBrains Mono Project Authors (github.com/JetBrains/JetBrainsMono)",
         used_for: "the whole HUD — tool-name label, toast, palette digits/readout, credits panel — standing in for the macOS build's `NSFont.monospacedSystemFont`",
     },

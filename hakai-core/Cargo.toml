@@ -11,6 +11,14 @@ readme = "../README.md"
 name = "hakai_core"
 path = "src/lib.rs"
 
+[features]
+# The GPU renderer — pipelines, the per-frame draw, HUD text shaping, and the
+# platform-agnostic scene `State`/`GpuLayer`. Off by default so `cargo test` (and the
+# headless CI job) stay exactly as light as before: no wgpu, no cosmic-text. The two
+# binaries (`hakai`, `hakai-win`) turn it on; each still owns its own window, event loop
+# and screen-capture backend.
+render = ["dep:wgpu", "dep:bytemuck", "dep:cosmic-text", "dep:raw-window-handle"]
+
 [dependencies]
 # If cargo can't resolve this (a breaking 0.12+ is out and old 0.11.x got yanked, which
 # is unlikely but not impossible), relax to "0.12" or whatever `cargo add tiny-skia`
@@ -24,3 +32,14 @@ ttf-parser = "0.24"
 # Parses the bundled `assets/manifest.json` for the credits panel — see src/credits.rs.
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+# --- `render` feature only (see [features] above) ---------------------------------------
+# Kept in lockstep with both binaries' own pins. wgpu 30: the Windows binary needs 27+ for
+# its DirectComposition transparency path; the Linux binary was bumped to match.
+wgpu = { version = "30", optional = true }
+raw-window-handle = { version = "0.6", optional = true }
+bytemuck = { version = "1", features = ["derive"], optional = true }
+# HUD text — real shaping/rasterization (arbitrary tool names, licence text, credits)
+# rather than the hand-traced glyph outlines `fonts.rs` uses for the stamp decal. See
+# src/render/text.rs for the version RISK notes carried over from the port.
+cosmic-text = { version = "0.12", optional = true }

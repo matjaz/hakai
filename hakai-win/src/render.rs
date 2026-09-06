@@ -26,7 +26,7 @@ use hakai_core::tools::{Tool, ToolId};
 use hakai_core::DamageLayer;
 
 use crate::state::GpuLayer;
-use crate::text::TextRenderer;
+use hakai_core::render::text::TextRenderer;
 use crate::theme;
 
 // ── Per-tile GPU resources ──────────────────────────────────────────────────────────────

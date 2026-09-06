@@ -79,13 +79,11 @@ use hakai_core::tools::flame_thrower::FlameThrower;
 use hakai_core::tools::hammer::Hammer;
 use hakai_core::tools::machine_gun::MachineGun;
 use hakai_core::tools::{Tool, ToolContext, ToolId};
-use hakai_core::{DamageLayer, DecalFactory, SeededRng};
+use hakai_core::render::text::TextRenderer;
+use hakai_core::{capture, DamageLayer, DecalFactory, SeededRng};
 
 mod audio;
-mod capture;
-mod text;
 mod theme;
-use text::TextRenderer;
 
 fn main() {
     // Defaults to `warn` when `RUST_LOG` isn't set at all — quiet for a normal launch

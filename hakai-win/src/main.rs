@@ -34,15 +34,14 @@ mod win32;
 
 #[path = "../../hakai/src/audio.rs"]
 mod audio;
-#[path = "../../hakai/src/text.rs"]
-mod text;
-// The Wayland-free brightness grid + snapshot conversion — its producer is
-// `duplication::DesktopDuplication` (DXGI Desktop Duplication).
-#[path = "../../hakai/src/capture.rs"]
-mod capture;
 
+// The renderer, HUD text shaping, and the Wayland-free brightness grid + snapshot
+// conversion all live in `hakai_core` now (behind its `render` feature). Only the
+// producer of the brightness grid is ours — `duplication::DesktopDuplication` (DXGI
+// Desktop Duplication).
+use hakai_core::capture;
+use hakai_core::render::text::TextRenderer;
 use state::State;
-use text::TextRenderer;
 
 fn build_instance() -> wgpu::Instance {
     let mut desc = wgpu::InstanceDescriptor::new_without_display_handle_from_env();
