@@ -49,6 +49,11 @@ Notes
 -----
 
 - Multi-monitor: one overlay per display.
+- Launching from a terminal minimises that terminal on start. Set
+  HAKAI_KEEP_TERMINAL=1 to keep it.
+- The overlay is marked so video players behind it (YouTube in a browser, etc.)
+  keep painting instead of pausing when they detect they're covered. If this
+  causes any visual glitch on your setup, set HAKAI_NO_LAYERED=1.
 - If the overlay renders at the wrong size (some Remote Desktop sessions report a
   bogus DPI scale), set HAKAI_WINDOWED=1 to run it as a plain resizable window.
 - The impact sound follows the brightness of whatever's under the cursor. If that

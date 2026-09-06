@@ -30,6 +30,7 @@ mod duplication;
 mod render;
 mod state;
 mod theme;
+mod win32;
 
 #[path = "../../hakai/src/audio.rs"]
 mod audio;
@@ -107,6 +108,9 @@ impl App {
         for m in &make_windows {
             let w = Arc::new(event_loop.create_window(overlay_attributes(m.as_ref())).expect("create_window"));
             w.set_cursor_visible(false);
+            // Before the wgpu surface (and its DComp swapchain) is built, so the final
+            // window styles are in place first.
+            win32::mark_non_occluding(&w);
             log::info!("window {:?}: {:?} @ scale {}", w.id(), w.inner_size(), w.scale_factor());
             self.windows.push(w);
         }
@@ -312,6 +316,10 @@ fn main() {
     env_logger::Builder::new()
         .parse_filters(&format!("{base},wgpu_core=warn,wgpu_hal=warn,naga=warn"))
         .init();
+
+    // Get the launching terminal out of the way before the overlay covers the screen —
+    // while it's still the foreground window.
+    win32::minimize_launcher();
 
     let event_loop = EventLoop::new().expect("event loop");
     event_loop.set_control_flow(ControlFlow::Poll);
