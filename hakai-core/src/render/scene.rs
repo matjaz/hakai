@@ -177,10 +177,25 @@ impl Scene {
             frozen: false,
             snapshot_texture: None,
         };
-        self.assets.build_damage(&mut layer);
-        layer.configured = true;
+        // The Wayland binary adds a layer before its first `configure` event, so its size
+        // is still 0×0 here — leave it unconfigured; `resize_layer` finishes it when the
+        // real size arrives. The Windows binary always has a real size and is done now.
+        if width > 1 && height > 1 {
+            self.assets.build_damage(&mut layer);
+            layer.configured = true;
+        }
         self.layers.push(layer);
         self.layers.len() - 1
+    }
+
+    /// A resize or scale change for one output. `logical` is its size in points; the wgpu
+    /// buffer is sized `points * scale`. Rebuilds that layer's damage/tiles at the new
+    /// scale. (Splits the `&mut layers[i]` / `&assets` borrow so callers don't have to.)
+    pub fn resize_layer(&mut self, index: usize, logical: (u32, u32), scale: f32) {
+        let assets = &self.assets;
+        if let Some(layer) = self.layers.get_mut(index) {
+            layer.resize(logical, scale, assets);
+        }
     }
 
     /// Drops the layer at `index` (a monitor unplugged, its window destroyed) — leaves the
@@ -339,28 +354,36 @@ impl Scene {
         self.layers.iter().any(|l| l.frozen && l.snapshot_texture.is_none())
     }
 
-    /// One real frame: advance every output, tick audio once, render every output. The
-    /// binary drives screen capture separately (see `feed_*_capture`), before calling this.
-    pub fn frame(&mut self) {
+    /// Advance + render one output. `drive_audio` ticks the shared audio gain-glide (must
+    /// be true for exactly one output per real frame — see `AudioBackend::update`). `dt` is
+    /// measured here from the layer's own `last_frame_time`, clamped so a stalled frame
+    /// can't hand a tool a huge step. A no-op until the layer is `configured`.
+    ///
+    /// The Wayland binary calls this per `wl_surface` frame callback; the Windows binary
+    /// loops it from `frame`.
+    pub fn tick_layer(&mut self, index: usize, drive_audio: bool, show_cursor: bool) {
+        let Some(gpu) = self.layers.get_mut(index) else { return };
+        if !gpu.configured {
+            return;
+        }
         let now = Instant::now();
+        let dt = gpu.last_frame_time.map(|t| (now - t).as_secs_f32()).unwrap_or(1.0 / 60.0).min(0.1);
+        gpu.last_frame_time = Some(now);
+
+        Scene::advance(&mut self.decals, &mut self.audio, &mut self.layers[index], dt);
+        if drive_audio {
+            self.audio.update(dt);
+        }
+        super::gpu::render(&self.assets, &mut self.text, &mut self.icons, show_cursor, &mut self.layers[index]);
+    }
+
+    /// One real frame across every output — the Windows binary's driver. The Wayland binary
+    /// drives `tick_layer` per surface instead. Screen capture is fed separately (see
+    /// `feed_*_capture`), before this.
+    pub fn frame(&mut self) {
         for i in 0..self.layers.len() {
-            if !self.layers[i].configured {
-                continue;
-            }
-            let dt = {
-                let gpu = &mut self.layers[i];
-                let dt = gpu.last_frame_time.map(|t| (now - t).as_secs_f32()).unwrap_or(1.0 / 60.0).min(0.1);
-                gpu.last_frame_time = Some(now);
-                dt
-            };
-            Scene::advance(&mut self.decals, &mut self.audio, &mut self.layers[i], dt);
-            // The audio gain-glide must advance once per real frame total, not once per
-            // output — drive it from the first output only, matching AudioEngine.swift.
-            if i == 0 {
-                self.audio.update(dt);
-            }
             let show_cursor = self.focused_layer == Some(i);
-            super::gpu::render(&self.assets, &mut self.text, &mut self.icons, show_cursor, &mut self.layers[i]);
+            self.tick_layer(i, i == 0, show_cursor);
         }
     }
 

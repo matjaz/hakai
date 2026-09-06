@@ -27,20 +27,20 @@ Work happened on branch `windows`.
 
 ### The shape of the port
 
-~80% of the code crosses unchanged. `hakai-core` (nine tools, damage layer, decal/icon/
-sprite generators, termite colony, particles, HUD/credits logic) is untouched. `audio.rs`,
-`text.rs` and `capture.rs` are `#[path]`-included from `hakai/src/` **verbatim** — `cpal`
-picks WASAPI, `cosmic-text` and the `BrightnessMap` need no changes.
+Almost everything is shared. `hakai-core` now holds the whole engine — nine tools, damage
+layer, decal/icon/sprite generators, termite colony, particles, HUD logic, **and** (behind
+its `render` feature) the wgpu renderer, HUD text shaping, `BrightnessMap`, and the
+platform-agnostic `Scene` / `GpuLayer`. `audio.rs` is still `#[path]`-included from
+`hakai/src/` verbatim (`cpal` picks WASAPI).
 
-New in `hakai-win/src/`:
+`hakai-win/src/` is now just the Windows edge:
 
 | File | What |
 |---|---|
-| `main.rs` | winit shell: one overlay window per monitor, `match` over `KeyCode`, pointer → `State` |
-| `render.rs` | the Linux binary's Phase 4 draw code (pipelines, tile/sprite helpers, HUD/palette/credits pixmap builders, the per-frame render) **ported to wgpu 30**; wgpu state bundled into one `Assets` struct |
-| `state.rs` | `State` + `GpuLayer` with every Wayland type stripped; damage layer, nine tools, particles, colony, HUD logic, `advance`, tool switching — verbatim from `hakai/src/main.rs` |
+| `main.rs` | winit shell: one overlay window per monitor, `match` over `KeyCode`, pointer → `hakai_core::render::Scene`, DXGI capture tick |
 | `duplication.rs` | `DesktopDuplication` — DXGI Desktop Duplication producer for `BrightnessMap` |
-| `theme.rs` | Windows stub — ships the built-in palette (`HudColors::FALLBACK`), both readers return `None` |
+| `theme.rs` | Windows stub — re-exports `hakai_core::render::HudColors`, both readers return `None` |
+| `win32.rs` | Win32 escape hatches (non-occluding layered window, launcher-minimise, global Esc hotkey) |
 
 Plus `hakai-win/package.ps1` (release zip) and `hakai-win/README.txt` (end-user doc).
 
@@ -53,10 +53,10 @@ Plus `hakai-win/package.ps1` (release zip) and `hakai-win/README.txt` (end-user 
   `with_no_redirection_bitmap`) or the DComp visual composites over an opaque backing.
   The Windows side forced the bump; the Linux binary (`hakai`) has since followed, so both
   now build against wgpu 30.
-- **Render code is duplicated, not shared** (yet). The ~1000 lines of wgpu draw code are
-  still copied into `hakai-win` (`render.rs` / `state.rs`) rather than `#[path]`-included
-  from `hakai/src/`. Now that both binaries are on the same wgpu major, lifting them into
-  `hakai-core` behind a feature is Phase 7 — still deferred, but no longer blocked.
+- **Render code is shared** (Phase 7, done). The ~1600 lines of renderer + scene code that
+  `hakai-win` used to carry a copy of (`render.rs` / `state.rs`) now live in
+  `hakai_core::render` behind the crate's `render` feature; both binaries consume them.
+  Each binary keeps only its window, its event loop and its screen-capture backend.
 - **No assets to bundle.** Every font and all 35 sounds are `include_bytes!`'d at compile
   time (the Linux binary does this too) and nothing in `hakai-core` reads a file at
   runtime, so `hakai-win.exe` is fully self-contained — 13 MB, runs from anywhere. The
@@ -133,19 +133,20 @@ window as a fallback.
 
 Everything else is polish; this is the actual "is it done" check.
 
-### 2. Phase 7 — unify the render code (optional, ~1 day)
+### 2. Phase 7 — unify the render code — **done**
 
-`hakai-win` and `hakai` share ~1,600 lines through the `#[path]` includes plus the
-duplicated `render.rs` / `state.rs`. Finish the job: lift `render.rs`, `state.rs`,
-`audio.rs` and `text.rs` into `hakai-core` behind a `render` feature, leaving each binary
-with only its window, its event loop and its capture backend.
+The renderer, HUD text shaping, `BrightnessMap`, `HudColors`, and the platform-agnostic
+`Scene` / `GpuLayer` all live in `hakai_core::render` (behind the crate's off-by-default
+`render` feature — the headless test job never compiles wgpu). Both binaries were bumped to
+wgpu 30 first, then the code was lifted:
 
-The prerequisite — **bumping the Linux binary to wgpu 30** — is done: `hakai/Cargo.toml`
-tracks wgpu 30, `main.rs`'s call sites are migrated (`TexelCopy*` copy types, `Some(..)`
-entry points, `immediate_size`, `multiview_mask`, `CurrentSurfaceTexture`, `Queue::present`,
-`SurfaceColorSpace`), release build passes `--locked`, and it runs clean on Hyprland (two
-layer surfaces, steady frame loop, no wgpu validation warnings). The lift itself is still
-deferred by choice — but no longer blocked.
+- `hakai_core::render::{gpu, scene, text, theme}` + `capture.rs` + `shader.wgsl` + the
+  JetBrains Mono fonts
+- `hakai-win` deleted its `render.rs` / `state.rs`; `hakai` deleted ~900 lines of inline
+  render helpers and its own `GpuLayer` / render / `advance` / tool-switching code. Each
+  binary keeps a `WlLayer` / `window_ids` map and its own capture backend.
+- Verified: `hakai` runs clean on Hyprland (configure → resize, ~55 fps frame loop,
+  `zwlr_screencopy` feeding the brightness map, no wgpu warnings); `hakai-win` build via CI.
 
 ### 3. Per-monitor Desktop Duplication (small)
 
