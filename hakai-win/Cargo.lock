@@ -841,6 +841,7 @@ version = "0.0.1"
 dependencies = [
  "bytemuck",
  "cosmic-text",
+ "log",
  "raw-window-handle",
  "serde",
  "serde_json",
@@ -853,7 +854,6 @@ dependencies = [
 name = "hakai-win"
 version = "0.0.1"
 dependencies = [
- "bytemuck",
  "cpal",
  "env_logger",
  "hakai-core",
@@ -861,7 +861,6 @@ dependencies = [
  "log",
  "pollster",
  "raw-window-handle",
- "tiny-skia",
  "wgpu",
  "windows",
  "winit",
