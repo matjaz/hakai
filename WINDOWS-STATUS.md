@@ -117,6 +117,9 @@ Run `cargo run --release --manifest-path hakai-win/Cargo.toml` on a real Windows
       it out.
 - [ ] Launching from a terminal minimises that terminal (`win32::minimize_launcher`);
       double-clicking from Explorer minimises nothing. `HAKAI_KEEP_TERMINAL=1` keeps it.
+- [x] Esc is a global hotkey (`win32::spawn_quit_hotkey`) — closes hakai even after
+      Alt+Tabbing to another app. Verified. Reserves Esc system-wide while hakai runs;
+      `HAKAI_NO_GLOBAL_ESC=1` makes it app-local.
 
 If the overlay renders at the wrong size on any box, `HAKAI_WINDOWED=1` runs it as a plain
 window as a fallback.
