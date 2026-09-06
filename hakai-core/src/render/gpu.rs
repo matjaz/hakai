@@ -16,18 +16,18 @@ use std::collections::HashMap;
 
 use wgpu::util::DeviceExt;
 
-use hakai_core::icons::ToolIcons;
-use hakai_core::particles::ParticleKind;
-use hakai_core::tools::machine_gun::MachineGun;
-use hakai_core::tools::chain_saw::ChainSaw;
-use hakai_core::tools::flame_thrower::FlameThrower;
-use hakai_core::tools::hammer::Hammer;
-use hakai_core::tools::{Tool, ToolId};
-use hakai_core::DamageLayer;
+use crate::icons::ToolIcons;
+use crate::particles::ParticleKind;
+use crate::tools::machine_gun::MachineGun;
+use crate::tools::chain_saw::ChainSaw;
+use crate::tools::flame_thrower::FlameThrower;
+use crate::tools::hammer::Hammer;
+use crate::tools::{Tool, ToolId};
+use crate::DamageLayer;
 
-use crate::state::GpuLayer;
-use hakai_core::render::text::TextRenderer;
-use crate::theme;
+use super::scene::GpuLayer;
+use super::text::TextRenderer;
+use super::theme;
 
 // ── Per-tile GPU resources ──────────────────────────────────────────────────────────────
 
@@ -496,11 +496,11 @@ const CREDITS_PADDING: f32 = 28.0;
 const CREDITS_BODY_SIZE: f32 = 12.0;
 const CREDITS_LINE_GAP: f32 = 5.0;
 
-fn credits_text_color(color: hakai_core::credits::TextColor, hud_colors: &theme::HudColors) -> [u8; 4] {
+fn credits_text_color(color: crate::credits::TextColor, hud_colors: &theme::HudColors) -> [u8; 4] {
     match color {
-        hakai_core::credits::TextColor::White => hud_rgba_arr(hud_colors.foreground, 255),
-        hakai_core::credits::TextColor::Dim => hud_rgba_arr(hud_colors.foreground, 158),
-        hakai_core::credits::TextColor::Accent => hud_rgba_arr(hud_colors.accent, 255),
+        crate::credits::TextColor::White => hud_rgba_arr(hud_colors.foreground, 255),
+        crate::credits::TextColor::Dim => hud_rgba_arr(hud_colors.foreground, 158),
+        crate::credits::TextColor::Accent => hud_rgba_arr(hud_colors.accent, 255),
     }
 }
 
@@ -509,7 +509,7 @@ fn build_credits_pixmap(text: &mut TextRenderer, screen_width: f32, hud_colors: 
     let max_width = 960.0_f32.min(screen_width - 120.0);
     let columns = (((max_width - CREDITS_PADDING * 2.0) / char_width).floor() as i64).max(40) as usize;
 
-    let lines = hakai_core::credits::build(columns);
+    let lines = crate::credits::build(columns);
 
     let width = columns as f32 * char_width + CREDITS_PADDING * 2.0;
     let mut height = CREDITS_PADDING * 2.0;
@@ -613,7 +613,7 @@ fn uniform_texture_sampler_layout(device: &wgpu::Device, label: &str) -> wgpu::B
 pub fn create_pipelines(device: &wgpu::Device, format: wgpu::TextureFormat) -> Pipelines {
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("hakai-shader"),
-        source: wgpu::ShaderSource::Wgsl(include_str!("../../hakai/src/shader.wgsl").into()),
+        source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
     });
 
     let tile_bind_group_layout = uniform_texture_sampler_layout(device, "tile-bind-group-layout");
@@ -804,8 +804,8 @@ impl Assets {
         queue: wgpu::Queue,
         format: wgpu::TextureFormat,
         icons: &mut ToolIcons,
-        sprites: &mut hakai_core::sprites::SpriteFactory,
-        decals: &mut hakai_core::DecalFactory,
+        sprites: &mut crate::sprites::SpriteFactory,
+        decals: &mut crate::DecalFactory,
         text: &mut TextRenderer,
         hud_colors: theme::HudColors,
         screen_width: f32,
@@ -845,13 +845,13 @@ impl Assets {
         ];
         let shell_texture = create_sprite_texture(&device, &queue, sprites.shell());
         let paint_colors = decals.paint_colors();
-        let droplet_textures: Vec<_> = (0..hakai_core::DecalFactory::DEFAULT_PAINT_COLORS.len() as i64)
+        let droplet_textures: Vec<_> = (0..crate::DecalFactory::DEFAULT_PAINT_COLORS.len() as i64)
             .map(|i| create_sprite_texture(&device, &queue, sprites.droplet(i, &paint_colors)))
             .collect();
-        let flame_textures: Vec<_> = (0..hakai_core::sprites::SpriteFactory::FLAME_FRAMES)
+        let flame_textures: Vec<_> = (0..crate::sprites::SpriteFactory::FLAME_FRAMES)
             .map(|f| create_sprite_texture(&device, &queue, sprites.standing_flame(f)))
             .collect();
-        let sliver_textures: Vec<_> = (0..hakai_core::DecalFactory::SLIVER_VARIANTS)
+        let sliver_textures: Vec<_> = (0..crate::DecalFactory::SLIVER_VARIANTS)
             .map(|v| create_sprite_texture(&device, &queue, decals.sliver(v)))
             .collect();
         let flash_texture = create_sprite_texture(&device, &queue, sprites.flash());

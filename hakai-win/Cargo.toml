@@ -18,20 +18,17 @@ strip = true
 # The headless core — the damage layer, all nine tools, decal/icon/sprite generators, the
 # termite colony, particles, HUD/credits logic. Identical to what the Linux binary depends
 # on; nothing in it is platform-specific.
+# The renderer and scene now live in hakai-core behind the `render` feature — this crate
+# is down to the window, the event loop and the DXGI capture backend.
 hakai-core = { path = "../hakai-core", features = ["render"] }
-# hakai-core's own raster dep, pinned to match — render.rs names `tiny_skia` types
-# directly.
-tiny-skia = "0.11"
 
 # wgpu 30: Phase 0 found wgpu 22's D3D12 backend only offers CompositeAlphaMode::Opaque on
 # a plain HWND; wgpu 27+ added Dx12SwapchainKind::DxgiFromVisual (a DirectComposition
 # presentation path) which does support transparency. The Linux binary was bumped to match.
-# `render.rs` / `state.rs` here still name wgpu/bytemuck directly until WINDOWS-PLAN.md
-# Phase 7 finishes lifting them into `hakai_core::render`.
+# Only the instance/adapter/device/surface setup names wgpu here now.
 wgpu = "30"
 raw-window-handle = "0.6"
 pollster = "0.3"
-bytemuck = { version = "1", features = ["derive"] }
 
 env_logger = "0.11"
 log = "0.4"

@@ -1,35 +1,35 @@
-//! Scene state and per-frame simulation — the platform-agnostic half of the Linux
-//! binary's `State`, with every Wayland type (`RegistryState`, `LayerSurface`,
-//! `zwlr_screencopy_*`, `wp_fractional_scale_*`) stripped out. What's left — the damage
-//! layer, the nine tool instances, particles, the termite colony, HUD logic, tool
-//! switching, and `advance` — is unchanged from `hakai/src/main.rs`.
+//! Scene state and per-frame simulation — everything both binaries share once their
+//! windowing and screen-capture backends are set aside: the per-output `GpuLayer` (damage
+//! layer, nine tool instances, particles, termite colony, HUD state, brightness map, a
+//! wgpu surface), the shared [`Assets`], and the `advance` / `frame` / tool-switching /
+//! pointer-input logic.
 //!
-//! One window per monitor, one `GpuLayer` each (Phase 5), mirroring the Linux binary's
-//! one-layer-surface-per-`wl_output`. Every `GpuLayer` owns its own damage layer, RNG,
-//! tool set and scale factor.
+//! One `GpuLayer` per output — a `wl_output` on Wayland, a monitor's `Window` on Windows.
+//! The binary owns the mapping from its own platform key to a layer index; `Scene` just
+//! keeps `layers: Vec<GpuLayer>`. Screen capture is likewise the binary's job — it calls
+//! [`Scene::feed_layer_capture`] / [`Scene::feed_capture_all`] with raw frame bytes when
+//! its backend produces one.
 
 use std::collections::HashMap;
 use std::time::Instant;
 
-use winit::window::WindowId;
+use crate::audio::AudioSink;
+use crate::colony::TermiteColony;
+use crate::hud::Hud;
+use crate::icons::ToolIcons;
+use crate::particles::ParticleSystem;
+use crate::sprites::SpriteFactory;
+use crate::tools::{Tool, ToolContext, ToolId};
+use crate::{DamageLayer, DecalFactory, SeededRng};
 
-use hakai_core::audio::AudioSink;
-use hakai_core::colony::TermiteColony;
-use hakai_core::hud::Hud;
-use hakai_core::icons::ToolIcons;
-use hakai_core::particles::ParticleSystem;
-use hakai_core::sprites::SpriteFactory;
-use hakai_core::tools::{Tool, ToolContext, ToolId};
-use hakai_core::{DamageLayer, DecalFactory, SeededRng};
+use crate::capture::BrightnessMap;
+use super::gpu::{Assets, ToastGpu, TileGpu};
+use super::text::TextRenderer;
 
-use hakai_core::capture::BrightnessMap;
-use crate::render::{Assets, ToastGpu, TileGpu};
-use hakai_core::render::text::TextRenderer;
-
-/// One output — one monitor's window. `wgpu_surface`/`config`/`window_id` are the platform
-/// edge; every other field is the same per-output game state the Linux `GpuLayer` carries.
+/// One output. `wgpu_surface`/`config` are the platform edge the binary hands in; every
+/// other field is per-output scene state. The binary keys layers however it likes (a
+/// `wl_surface`, a winit `WindowId`) and tracks the key→index mapping itself.
 pub struct GpuLayer {
-    pub window_id: WindowId,
     pub wgpu_surface: wgpu::Surface<'static>,
     config: wgpu::SurfaceConfiguration,
 
@@ -79,12 +79,13 @@ impl GpuLayer {
         self.wgpu_surface.configure(device, &self.config);
     }
 
-    /// A resize or scale change: `physical` is winit's `inner_size()` in pixels, `scale`
-    /// its `scale_factor()`. Points = physical / scale; the surface buffer stays physical.
-    pub fn resize(&mut self, physical: (u32, u32), scale: f32, assets: &Assets) {
+    /// A resize or scale change. `logical` is the output's size in **points** (Wayland
+    /// logical coords, or winit's `inner_size() / scale_factor()`); the wgpu surface buffer
+    /// is sized `points * scale`. Rebuilds the damage layer and GPU tiles at the new scale.
+    pub fn resize(&mut self, logical: (u32, u32), scale: f32, assets: &Assets) {
+        self.width = logical.0.max(1);
+        self.height = logical.1.max(1);
         self.scale = if scale > 0.0 { scale } else { 1.0 };
-        self.width = ((physical.0 as f32 / self.scale).round() as u32).max(1);
-        self.height = ((physical.1 as f32 / self.scale).round() as u32).max(1);
         let (bw, bh) = self.buffer_px();
         self.config.width = bw;
         self.config.height = bh;
@@ -94,7 +95,7 @@ impl GpuLayer {
     }
 }
 
-pub struct State {
+pub struct Scene {
     pub assets: Assets,
     pub decals: DecalFactory,
     pub icons: ToolIcons,
@@ -105,41 +106,26 @@ pub struct State {
     pub audio: AudioSink,
     pub layers: Vec<GpuLayer>,
 
-    /// DXGI Desktop Duplication of the **primary** output — `None` when it isn't available
-    /// (hybrid graphics, a Remote Desktop session, another duplicator already running).
-    /// Every tool then falls back to a random impact-sound variant. On a multi-monitor
-    /// setup a secondary output's brightness is sampled from the primary's capture — not
-    /// accurate, but no worse than the random fallback, and per-output duplication is a
-    /// later refinement.
-    pub duplication: Option<crate::duplication::DesktopDuplication>,
-    /// `None` until the first capture — so the brightness map is populated on the very
-    /// first frame rather than after a full `CAPTURE_INTERVAL`.
-    pub last_capture: Option<Instant>,
-
-    /// Which layer the cursor is currently over (Wayland's per-surface pointer focus, here
-    /// tracked from `CursorEntered`/`CursorLeft`). Gates cursor drawing to that output.
+    /// Which layer the cursor is currently over — the binary sets this from its own
+    /// per-output pointer focus (`wl_pointer` enter/leave, winit `CursorEntered`/`Left`).
+    /// Gates cursor drawing to that output.
     pub focused_layer: Option<usize>,
     pub shift_held: bool,
 }
 
-impl State {
-    pub fn layer_index(&self, id: WindowId) -> Option<usize> {
-        self.layers.iter().position(|l| l.window_id == id)
-    }
-
-    /// Adds a `GpuLayer` for a freshly-made window surface. `physical` is the window's
-    /// `inner_size()` in pixels, `scale` its `scale_factor()`.
-    pub fn add_window_layer(
+impl Scene {
+    /// Adds a `GpuLayer` for a surface the binary just created, and returns its index.
+    /// `logical` is the output's size in points; `scale` its DPI factor.
+    pub fn add_layer(
         &mut self,
-        window_id: WindowId,
         wgpu_surface: wgpu::Surface<'static>,
         adapter: &wgpu::Adapter,
-        physical: (u32, u32),
+        logical: (u32, u32),
         scale: f32,
-    ) {
+    ) -> usize {
         let scale = if scale > 0.0 { scale } else { 1.0 };
-        let width = ((physical.0 as f32 / scale).round() as u32).max(1);
-        let height = ((physical.1 as f32 / scale).round() as u32).max(1);
+        let width = logical.0.max(1);
+        let height = logical.1.max(1);
 
         let caps = wgpu_surface.get_capabilities(adapter);
         let format = caps.formats.iter().copied().find(|f| !f.is_srgb()).unwrap_or(caps.formats[0]);
@@ -152,8 +138,8 @@ impl State {
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format,
-            width: physical.0.max(1),
-            height: physical.1.max(1),
+            width: ((width as f32 * scale).round() as u32).max(1),
+            height: ((height as f32 * scale).round() as u32).max(1),
             present_mode: wgpu::PresentMode::AutoVsync,
             desired_maximum_frame_latency: 2,
             alpha_mode,
@@ -169,7 +155,6 @@ impl State {
             .wrapping_add(self.layers.len() as u64 + 1);
 
         let mut layer = GpuLayer {
-            window_id,
             wgpu_surface,
             config,
             width,
@@ -192,19 +177,38 @@ impl State {
             frozen: false,
             snapshot_texture: None,
         };
-        self.assets.build_damage(&mut layer);
-        layer.configured = true;
+        // The Wayland binary adds a layer before its first `configure` event, so its size
+        // is still 0×0 here — leave it unconfigured; `resize_layer` finishes it when the
+        // real size arrives. The Windows binary always has a real size and is done now.
+        if width > 1 && height > 1 {
+            self.assets.build_damage(&mut layer);
+            layer.configured = true;
+        }
         self.layers.push(layer);
+        self.layers.len() - 1
     }
 
-    /// Drops the layer for a window that's gone (a monitor unplugged, its window
-    /// destroyed) — leaves the rest running.
-    pub fn remove_window_layer(&mut self, id: WindowId) {
-        self.layers.retain(|l| l.window_id != id);
-        if let Some(f) = self.focused_layer {
-            if f >= self.layers.len() {
-                self.focused_layer = None;
-            }
+    /// A resize or scale change for one output. `logical` is its size in points; the wgpu
+    /// buffer is sized `points * scale`. Rebuilds that layer's damage/tiles at the new
+    /// scale. (Splits the `&mut layers[i]` / `&assets` borrow so callers don't have to.)
+    pub fn resize_layer(&mut self, index: usize, logical: (u32, u32), scale: f32) {
+        let assets = &self.assets;
+        if let Some(layer) = self.layers.get_mut(index) {
+            layer.resize(logical, scale, assets);
+        }
+    }
+
+    /// Drops the layer at `index` (a monitor unplugged, its window destroyed) — leaves the
+    /// rest running. The binary must fix up its own key→index mapping to match.
+    pub fn remove_layer(&mut self, index: usize) {
+        if index >= self.layers.len() {
+            return;
+        }
+        self.layers.remove(index);
+        match self.focused_layer {
+            Some(f) if f == index => self.focused_layer = None,
+            Some(f) if f > index => self.focused_layer = Some(f - 1),
+            _ => {}
         }
     }
 
@@ -275,7 +279,7 @@ impl State {
     }
 
     /// Drives one output's active tool, particles and termites forward by `dt`. Verbatim
-    /// from the Linux binary's `State::advance`, minus the screen-capture bookkeeping.
+    /// from the Linux binary's `Scene::advance`, minus the screen-capture bookkeeping.
     fn advance(decals: &mut DecalFactory, audio: &mut AudioSink, gpu: &mut GpuLayer, dt: f32) {
         let active = gpu.active_tool;
         let mouse = gpu.mouse;
@@ -322,60 +326,64 @@ impl State {
         gpu.hud.advance(dt);
     }
 
-    /// Requests a fresh desktop capture if one is due (every `CAPTURE_INTERVAL`, or
-    /// immediately when a frozen output still has no snapshot), and feeds it to every
-    /// output's brightness map. A no-op when duplication isn't available.
-    fn capture_tick(&mut self, now: Instant) {
-        let Some(dupl) = self.duplication.as_mut() else { return };
-        let want_snapshot = self.layers.iter().any(|l| l.frozen && l.snapshot_texture.is_none());
-        let due = match self.last_capture {
-            None => true,
-            Some(t) => want_snapshot || now.duration_since(t).as_secs_f32() >= hakai_core::capture::CAPTURE_INTERVAL,
-        };
-        if !due {
-            return;
-        }
-        self.last_capture = Some(now);
-
-        let layers = &mut self.layers;
+    /// Feeds one freshly captured desktop frame into a single output's brightness map (and
+    /// its frozen-mode snapshot texture, if it's frozen and doesn't have one yet). Raw
+    /// bytes are BGRA, `stride` bytes per row — see [`crate::capture`]. Used by the Wayland
+    /// binary, whose `zwlr_screencopy_v1` captures are per-`wl_output`.
+    pub fn feed_layer_capture(&mut self, index: usize, bytes: &[u8], w: u32, h: u32, stride: u32) {
         let assets = &self.assets;
-        let got = dupl.capture(|bytes, w, h, stride| {
-            for layer in layers.iter_mut() {
-                layer.brightness.update(bytes, w, h, stride);
-                if layer.frozen && layer.snapshot_texture.is_none() {
-                    let rgba = hakai_core::capture::to_rgba(bytes, w, h, stride);
-                    layer.snapshot_texture = Some(crate::render::upload_snapshot(assets, &rgba, w, h));
-                }
-            }
-            (w, h)
-        });
-        if let Some((w, h)) = got {
-            log::trace!("desktop capture {w}x{h}");
+        let Some(layer) = self.layers.get_mut(index) else { return };
+        layer.brightness.update(bytes, w, h, stride);
+        if layer.frozen && layer.snapshot_texture.is_none() {
+            let rgba = crate::capture::to_rgba(bytes, w, h, stride);
+            layer.snapshot_texture = Some(super::gpu::upload_snapshot(assets, &rgba, w, h));
         }
     }
 
-    /// One real frame: advance every output, tick audio once, render every output.
-    pub fn frame(&mut self) {
-        let now = Instant::now();
-        self.capture_tick(now);
+    /// Feeds one captured desktop frame into **every** output — used by the Windows binary,
+    /// whose single DXGI duplicator covers the primary output and stands in for the rest.
+    pub fn feed_capture_all(&mut self, bytes: &[u8], w: u32, h: u32, stride: u32) {
         for i in 0..self.layers.len() {
-            if !self.layers[i].configured {
-                continue;
-            }
-            let dt = {
-                let gpu = &mut self.layers[i];
-                let dt = gpu.last_frame_time.map(|t| (now - t).as_secs_f32()).unwrap_or(1.0 / 60.0).min(0.1);
-                gpu.last_frame_time = Some(now);
-                dt
-            };
-            State::advance(&mut self.decals, &mut self.audio, &mut self.layers[i], dt);
-            // The audio gain-glide must advance once per real frame total, not once per
-            // output — drive it from the first output only, matching AudioEngine.swift.
-            if i == 0 {
-                self.audio.update(dt);
-            }
+            self.feed_layer_capture(i, bytes, w, h, stride);
+        }
+    }
+
+    /// Whether any frozen output is still waiting for its snapshot — a binary can use this
+    /// to trigger an off-schedule capture the moment `M` is pressed.
+    pub fn wants_snapshot(&self) -> bool {
+        self.layers.iter().any(|l| l.frozen && l.snapshot_texture.is_none())
+    }
+
+    /// Advance + render one output. `drive_audio` ticks the shared audio gain-glide (must
+    /// be true for exactly one output per real frame — see `AudioBackend::update`). `dt` is
+    /// measured here from the layer's own `last_frame_time`, clamped so a stalled frame
+    /// can't hand a tool a huge step. A no-op until the layer is `configured`.
+    ///
+    /// The Wayland binary calls this per `wl_surface` frame callback; the Windows binary
+    /// loops it from `frame`.
+    pub fn tick_layer(&mut self, index: usize, drive_audio: bool, show_cursor: bool) {
+        let Some(gpu) = self.layers.get_mut(index) else { return };
+        if !gpu.configured {
+            return;
+        }
+        let now = Instant::now();
+        let dt = gpu.last_frame_time.map(|t| (now - t).as_secs_f32()).unwrap_or(1.0 / 60.0).min(0.1);
+        gpu.last_frame_time = Some(now);
+
+        Scene::advance(&mut self.decals, &mut self.audio, &mut self.layers[index], dt);
+        if drive_audio {
+            self.audio.update(dt);
+        }
+        super::gpu::render(&self.assets, &mut self.text, &mut self.icons, show_cursor, &mut self.layers[index]);
+    }
+
+    /// One real frame across every output — the Windows binary's driver. The Wayland binary
+    /// drives `tick_layer` per surface instead. Screen capture is fed separately (see
+    /// `feed_*_capture`), before this.
+    pub fn frame(&mut self) {
+        for i in 0..self.layers.len() {
             let show_cursor = self.focused_layer == Some(i);
-            crate::render::render(&self.assets, &mut self.text, &mut self.icons, show_cursor, &mut self.layers[i]);
+            self.tick_layer(i, i == 0, show_cursor);
         }
     }
 
@@ -409,7 +417,7 @@ impl State {
 
         let screen = (gpu.width as f32, gpu.height as f32);
         let palette_hit = if gpu.hud.palette_open() {
-            crate::render::palette_tool_at(point, screen)
+            super::gpu::palette_tool_at(point, screen)
         } else {
             None
         };
