@@ -88,6 +88,14 @@ pub struct State {
     pub audio: AudioSink,
     pub layers: Vec<GpuLayer>,
 
+    /// DXGI Desktop Duplication — `None` when it isn't available (hybrid graphics, a
+    /// Remote Desktop session, another duplicator already running). Every tool then falls
+    /// back to a random impact-sound variant.
+    pub duplication: Option<crate::duplication::DesktopDuplication>,
+    /// `None` until the first capture — so the brightness map is populated on the very
+    /// first frame rather than after a full `CAPTURE_INTERVAL`.
+    pub last_capture: Option<Instant>,
+
     /// Whether the cursor is inside the window — the Windows equivalent of the Linux
     /// binary's `pointer_focus` (which output the pointer is over). Gates cursor drawing.
     pub pointer_inside: bool,
@@ -267,9 +275,42 @@ impl State {
         gpu.hud.advance(dt);
     }
 
+    /// Requests a fresh desktop capture if one is due (every `CAPTURE_INTERVAL`, or
+    /// immediately when a frozen output still has no snapshot), and feeds it to every
+    /// output's brightness map. A no-op when duplication isn't available.
+    fn capture_tick(&mut self, now: Instant) {
+        let Some(dupl) = self.duplication.as_mut() else { return };
+        let want_snapshot = self.layers.iter().any(|l| l.frozen && l.snapshot_texture.is_none());
+        let due = match self.last_capture {
+            None => true,
+            Some(t) => want_snapshot || now.duration_since(t).as_secs_f32() >= crate::capture::CAPTURE_INTERVAL,
+        };
+        if !due {
+            return;
+        }
+        self.last_capture = Some(now);
+
+        let layers = &mut self.layers;
+        let assets = &self.assets;
+        let got = dupl.capture(|bytes, w, h, stride| {
+            for layer in layers.iter_mut() {
+                layer.brightness.update(bytes, w, h, stride);
+                if layer.frozen && layer.snapshot_texture.is_none() {
+                    let rgba = crate::capture::to_rgba(bytes, w, h, stride);
+                    layer.snapshot_texture = Some(crate::render::upload_snapshot(assets, &rgba, w, h));
+                }
+            }
+            (w, h)
+        });
+        if let Some((w, h)) = got {
+            log::trace!("desktop capture {w}x{h}");
+        }
+    }
+
     /// One real frame: advance every output, tick audio once, render every output.
     pub fn frame(&mut self) {
         let now = Instant::now();
+        self.capture_tick(now);
         for i in 0..self.layers.len() {
             if !self.layers[i].configured {
                 continue;

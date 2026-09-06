@@ -24,6 +24,7 @@ use hakai_core::sprites::SpriteFactory;
 use hakai_core::tools::ToolId;
 use hakai_core::DecalFactory;
 
+mod duplication;
 mod render;
 mod state;
 mod theme;
@@ -32,11 +33,9 @@ mod theme;
 mod audio;
 #[path = "../../hakai/src/text.rs"]
 mod text;
-// The Wayland-free brightness grid + snapshot conversion. Its producer (DXGI Desktop
-// Duplication) lands in Phase 4 — until then `update`/`to_rgba`/`CAPTURE_INTERVAL` are
-// dead here, same as on a compositor without the screencopy protocol.
+// The Wayland-free brightness grid + snapshot conversion — its producer is
+// `duplication::DesktopDuplication` (DXGI Desktop Duplication).
 #[path = "../../hakai/src/capture.rs"]
-#[allow(dead_code)]
 mod capture;
 
 use state::State;
@@ -155,6 +154,8 @@ impl App {
             text,
             audio,
             layers: Vec::new(),
+            duplication: duplication::DesktopDuplication::new(),
+            last_capture: None,
             pointer_inside: false,
             shift_held: false,
         };
