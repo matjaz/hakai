@@ -336,20 +336,27 @@ token) removes it on day one. For a toy that draws on your screen, ship it unsig
 
 ---
 
-## Phase 7 — the lift (1 day, optional but do it)
+## Phase 7 — the lift — ✅ done (PRs #2–#4)
 
-By now `hakai-win` and `hakai` share ~1,600 lines through `#[path]` includes and two
-extracted modules. Finish the job: move `render.rs`, `state.rs`, `audio.rs` and `text.rs`
-into `hakai-core` behind a `render` feature, leaving each binary with only its window, its
-event loop and its capture backend — a few hundred lines each.
+Both binaries were bumped to wgpu 30 first (the Linux side was still on 22), then the code
+was lifted into `hakai-core` behind an off-by-default `render` feature:
 
-`wgpu` and `cpal` are cross-platform; only their *host* is platform-specific, and that is
-chosen at runtime rather than in the source. Nothing about them belongs in a
-platform-specific crate.
+- `hakai_core::render::{gpu, scene, text, theme}` + `capture` + `shader.wgsl` + the
+  JetBrains Mono fonts. `Scene` / `GpuLayer` are platform-generic (no winit/Wayland types);
+  each binary feeds screen-capture bytes in via `Scene::feed_layer_capture`.
+- `hakai-win` deleted `render.rs` / `state.rs`; `hakai` deleted ~900 lines of inline render
+  helpers and its own `GpuLayer` / render / `advance` / tool-switching code. Each binary is
+  now window + event loop + capture backend.
 
-**Exit criterion.** Both binaries build and run from the shared core. `hakai-win/src` is
-under ~800 lines. The Linux build still passes CI unchanged — that is the check that the
-lift was a move and not a rewrite.
+Deltas from the plan above: `audio.rs` stayed `#[path]`-included (it's tiny and already
+worked); the extracted-first `hakai/src/render.rs` / `state.rs` step was skipped — the
+Windows port's own `render.rs` / `state.rs` were the clean module form and moved
+near-verbatim, and `hakai`'s inline version was deleted rather than reconciled.
+
+**Exit criterion — met.** Both binaries build from the shared core; `hakai-win/src` is
+~815 lines (`main.rs` 408, the rest DXGI + Win32 glue), and `hakai/src/main.rs` dropped
+from ~2,980 to ~900. All three CI jobs green, including the Linux `hakai` build — the check
+that the lift was a move, not a rewrite. `hakai` verified running on Hyprland.
 
 ---
 

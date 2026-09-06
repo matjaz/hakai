@@ -3,13 +3,18 @@
 Progress log for the Windows port. `WINDOWS-PORT.md` is the analysis, `WINDOWS-PLAN.md` is
 the phased plan; this is what actually got built, what's confirmed, and what's left.
 
-**Bottom line: the Windows build is functionally complete (phases 0–6).** It's a native
+**Bottom line: the Windows build is functionally complete (phases 0–7).** It's a native
 transparent Direct3D 12 overlay with all nine tools, WASAPI audio, brightness-driven
 impact sounds via DXGI Desktop Duplication, one window per monitor with Per-Monitor DPI,
 and a portable `.zip` that runs on a clean machine. Built and verified on real hardware,
 with a few checks still pending a normal (non-RDP) display.
 
-Work happened on branch `windows`.
+Phase 7 (the render-code lift) is done: the renderer and the whole per-output scene live
+in `hakai_core::render`, shared by both binaries; `hakai-win/src` is down to `main.rs` +
+`duplication.rs` + `theme.rs` + `win32.rs`.
+
+Work happened on branch `windows`, then `wgpu-30-linux` → `render-lift` → `render-lift-wip`
+for Phase 7 (PRs #2–#4).
 
 ---
 
@@ -24,6 +29,7 @@ Work happened on branch `windows`.
 | 4 | Screen capture — DXGI Desktop Duplication → `BrightnessMap` | `392cf38` | ✅ verified |
 | 5 | One overlay window per monitor, Per-Monitor DPI v2 | `2d75786` | ✅ single-monitor; ⚠ multi-monitor unverified |
 | 6 | Portable `.zip` + `windows-latest` CI job | `b31c4df` | ✅ verified |
+| 7 | Renderer + scene lifted into `hakai_core::render` (both binaries) | PRs #2–#4 | ✅ CI green all 3 jobs; `hakai` verified on Hyprland; `hakai-win` runtime unverified |
 
 ### The shape of the port
 
@@ -62,9 +68,9 @@ Plus `hakai-win/package.ps1` (release zip) and `hakai-win/README.txt` (end-user 
   runtime, so `hakai-win.exe` is fully self-contained — 13 MB, runs from anywhere. The
   plan's "move `hakai/assets/` to the repo root" step turned out unnecessary.
 - **DPI the Linux way.** `GpuLayer.width/height` are points (logical); the wgpu surface
-  buffer is `points × scale` (physical). NDC is a ratio, so every placement in `render.rs`
-  is identical either way. The one conversion is `CursorMoved`'s physical position ÷ scale,
-  done once in `main.rs`.
+  buffer is `points × scale` (physical). NDC is a ratio, so every placement in
+  `hakai_core::render::gpu` is identical either way. The one conversion is the pointer's
+  physical position ÷ scale, done once in each binary's `main.rs`.
 - **Graceful degradation preserved.** `DesktopDuplication::new()` returns `None` on any
   failure (hybrid graphics, a Remote Desktop session, another duplicator holding the
   output); tools then fall back to a random impact-sound variant, exactly as on a
@@ -96,8 +102,12 @@ the overlay is flaky. So visual verification is partial. Confirmed by screenshot
 ## Not yet verified — needs a normal monitor
 
 Run `cargo run --release --manifest-path hakai-win/Cargo.toml` on a real Windows desktop
-(ideally two monitors, ideally mixed DPI) and check:
+(ideally two monitors, ideally mixed DPI) and check. **Phase 7 re-opens this list** — the
+Windows binary now runs `hakai_core::render` rather than its own copy, and while the Linux
+side of that shared code is verified on Hyprland, no part of `hakai-win` has been run since
+the lift:
 
+- [ ] The overlay still comes up at all — transparent, all layers, the scene renders
 - [ ] All nine tools produce their effect (only hammer + color-thrower exercised so far)
 - [ ] Chain-saw revs with movement; flame-thrower fires keep burning through a tool switch;
       termites survive a tool switch; the washer erases damage but not living termites
