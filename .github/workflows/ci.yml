@@ -55,3 +55,26 @@ jobs:
 
       - name: cargo build --release
         run: cargo build --release --manifest-path hakai/Cargo.toml --locked
+
+  # hakai-win (the Windows binary). windows-latest ships the MSVC toolchain, so no setup
+  # beyond rustup. Build-only: GitHub's runners have no interactive desktop session, so
+  # the window, the DirectComposition surface and Desktop Duplication can be compiled but
+  # never exercised — this job's job is to catch Windows-only compile breakage (a wgpu 30
+  # API drift, a `windows` crate bump) on every push, since day-to-day development happens
+  # on Linux. hakai-core's own tests run on Windows here too, cheaply, as a cross-check
+  # that the headless core stays platform-clean.
+  hakai-win:
+    name: hakai-win (Windows binary — build only, no desktop in CI)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: hakai-win
+
+      - name: cargo test (hakai-core, on Windows)
+        run: cargo test --manifest-path hakai-core/Cargo.toml --locked
+
+      - name: cargo build --release (hakai-win)
+        run: cargo build --release --manifest-path hakai-win/Cargo.toml --locked
