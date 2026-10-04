@@ -129,11 +129,12 @@ impl Scene {
 
         let caps = wgpu_surface.get_capabilities(adapter);
         let format = caps.formats.iter().copied().find(|f| !f.is_srgb()).unwrap_or(caps.formats[0]);
-        let alpha_mode = caps
-            .alpha_modes
-            .iter()
-            .copied()
-            .find(|m| *m == wgpu::CompositeAlphaMode::PreMultiplied)
+        // DX12 (DirectComposition) offers PreMultiplied; Metal only PostMultiplied, which
+        // is just a non-opaque CAMetalLayer — CoreAnimation composites it as premultiplied,
+        // which is what ALPHA_BLENDING onto a cleared-transparent target already produces.
+        let alpha_mode = [wgpu::CompositeAlphaMode::PreMultiplied, wgpu::CompositeAlphaMode::PostMultiplied]
+            .into_iter()
+            .find(|m| caps.alpha_modes.contains(m))
             .unwrap_or(caps.alpha_modes[0]);
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,

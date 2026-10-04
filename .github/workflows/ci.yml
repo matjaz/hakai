@@ -78,3 +78,23 @@ jobs:
 
       - name: cargo build --release (hakai-win)
         run: cargo build --release --manifest-path hakai-win/Cargo.toml --locked
+
+  # hakai-mac (the macOS binary). Build-only for the same reason as hakai-win: no
+  # interactive session on the runner, so the overlay, Metal surface and screen capture
+  # compile but never run. Both architectures, since the release DMG is a universal binary.
+  hakai-mac:
+    name: hakai-mac (macOS binary — build only, universal)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: hakai-mac
+
+      - name: cargo build --release (hakai-mac, arm64 + x86_64)
+        run: |
+          cargo build --release --manifest-path hakai-mac/Cargo.toml --locked --target aarch64-apple-darwin
+          cargo build --release --manifest-path hakai-mac/Cargo.toml --locked --target x86_64-apple-darwin

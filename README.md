@@ -131,6 +131,26 @@ Windows).
 See `WINDOWS-PORT.md` (analysis) and `WINDOWS-PLAN.md` (the phased build log) for the full
 story.
 
+## macOS
+
+`hakai-mac/` is the macOS build — a third binary crate on the same `hakai-core`, sharing
+`hakai-win`'s winit/wgpu 30 scene and renderer verbatim (`#[path]`). Metal draws into a
+non-opaque `CAMetalLayer`; the overlay is lifted to the screensaver window level so it
+covers the menu bar and the Dock too, on every Space and every display (the recipe from
+the Swift original's `OverlayWindow`). The brightness-driven impact sound reads the screen
+with `CGWindowListCreateImage`, excluding the overlay itself — that needs the *Screen
+Recording* permission; without it a random variant is used, as everywhere else.
+
+Download the `.dmg` from the releases page, drag *Hakai* to Applications. It's a universal
+binary (Apple silicon + Intel, macOS 11+), ad-hoc signed rather than notarised, so the
+first launch needs *System Settings → Privacy & Security → Open Anyway*. See
+[`hakai-mac/README.txt`](hakai-mac/README.txt) for the key list and notes.
+
+```sh
+cargo run --release --manifest-path hakai-mac/Cargo.toml   # run it
+hakai-mac/package.sh                                        # build the universal release DMG
+```
+
 ## Layout
 
 ```
@@ -138,6 +158,8 @@ hakai/         the Linux binary — wlr-layer-shell + wgpu rendering, Wayland in
                audio, screen capture, Omarchy theme integration
 hakai-win/     the Windows binary — a DirectComposition overlay, winit, DXGI Desktop
                Duplication; same hakai-core, audio.rs and text.rs shared verbatim
+hakai-mac/     the macOS binary — a screensaver-level Metal overlay, CoreGraphics capture;
+               reuses hakai-win's scene/renderer and hakai's audio.rs/text.rs verbatim
 hakai-core/    headless library — everything that doesn't need a window: the tiled damage
                layer, procedural decal/icon/sprite generators, all nine tools, the termite
                colony, particle system, HUD/credits logic

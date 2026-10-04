@@ -1,0 +1,43 @@
+[package]
+name = "hakai-mac"
+version = "0.0.1"
+edition = "2021"
+description = "Smash, burn and repaint your desktop — the macOS build of hakai."
+license = "MIT"
+repository = "https://github.com/matjaz/hakai"
+readme = "../README.md"
+
+[[bin]]
+name = "hakai-mac"
+path = "src/main.rs"
+
+[profile.release]
+strip = true
+
+[dependencies]
+# The headless core — identical to what the Linux and Windows binaries depend on.
+hakai-core = { path = "../hakai-core" }
+tiny-skia = "0.11"
+
+# Same wgpu as hakai-win: render.rs and state.rs are #[path]-shared from that crate, and
+# wgpu 30's Metal backend offers a non-opaque CAMetalLayer (PostMultiplied), which is all
+# a transparent overlay needs on macOS.
+wgpu = "30"
+raw-window-handle = "0.6"
+pollster = "0.3"
+bytemuck = { version = "1", features = ["derive"] }
+
+env_logger = "0.11"
+log = "0.4"
+
+winit = "0.30"
+cosmic-text = "0.12"
+
+# cpal picks the CoreAudio host on macOS; hound decodes the bundled WAVs.
+cpal = "0.18"
+hound = "3"
+
+# AppKit escape hatches — the window level, Spaces behaviour and frame that winit doesn't
+# expose. Plain msg_send! on raw pointers; no typed AppKit bindings needed.
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSGeometry"] }
