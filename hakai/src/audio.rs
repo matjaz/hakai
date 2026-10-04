@@ -313,7 +313,7 @@ impl CpalBackend {
             None
         })?;
 
-        let config = select_stream_config(&device);
+        let config = select_stream_config(&device)?;
         let channels = config.channels() as usize;
         let sample_rate = config.sample_rate();
         log::info!("audio output: {} channels @ {sample_rate}Hz", channels);
@@ -417,7 +417,11 @@ impl AudioBackend for CpalBackend {
 /// the same as a real compile, but the one part of this whole port's `cpal` integration
 /// that carries no residual doc-uncertainty on top of the usual "not actually compiled
 /// yet" risk.
-fn select_stream_config(device: &cpal::Device) -> cpal::SupportedStreamConfig {
+///
+/// `None` when the device can't report even a default config — a "default" ALSA device
+/// with no card behind it (a headless box, a container) does exactly that, and hakai then
+/// runs silent like any other no-audio case rather than panicking.
+fn select_stream_config(device: &cpal::Device) -> Option<cpal::SupportedStreamConfig> {
     // `cpal::SampleRate` is a plain `u32` type alias in this version (not the
     // tuple-struct newtype older `cpal` releases had) — confirmed by the compiler, not a
     // guess: `cpal::SampleRate(44_100)` doesn't parse as a value, and `.sample_rate().0`
@@ -436,7 +440,10 @@ fn select_stream_config(device: &cpal::Device) -> cpal::SupportedStreamConfig {
             .max_by_key(|c| c.channels() == 2)
             .map(|c| c.with_sample_rate(TARGET_RATE))
     });
-    preferred.unwrap_or_else(|| {
-        device.default_output_config().unwrap_or_else(|e| panic!("no usable audio output config: {e}"))
+    preferred.or_else(|| {
+        device
+            .default_output_config()
+            .map_err(|e| log::warn!("no usable audio output config ({e}) — running without sound"))
+            .ok()
     })
 }
