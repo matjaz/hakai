@@ -69,6 +69,10 @@ pub struct Hud {
 
     credits_open: bool,
     credits_anim: CreditsAnim,
+    /// How far the credits panel is scrolled down, in points from its top. Only matters
+    /// when the panel is taller than the screen (a phone in landscape); the renderer and
+    /// `Scene::scroll_credits` clamp it to the panel's real overflow.
+    credits_scroll: f32,
 }
 
 impl Hud {
@@ -80,6 +84,7 @@ impl Hud {
             since_toast: 0.0,
             credits_open: false,
             credits_anim: CreditsAnim::Hidden,
+            credits_scroll: 0.0,
         }
     }
 
@@ -165,7 +170,19 @@ impl Hud {
 
     pub fn toggle_credits(&mut self) {
         self.credits_open = !self.credits_open;
+        if self.credits_open {
+            self.credits_scroll = 0.0;
+        }
         self.credits_anim = if self.credits_open { CreditsAnim::FadingIn(0.0) } else { CreditsAnim::FadingOut(0.0) };
+    }
+
+    pub fn credits_scroll(&self) -> f32 {
+        self.credits_scroll
+    }
+
+    /// Sets the scroll offset, clamped to `0..=max` (the panel's overflow past the screen).
+    pub fn set_credits_scroll(&mut self, scroll: f32, max: f32) {
+        self.credits_scroll = scroll.clamp(0.0, max.max(0.0));
     }
 
     pub fn credits_alpha(&self) -> f32 {

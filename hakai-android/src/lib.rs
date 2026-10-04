@@ -11,11 +11,13 @@
 //! it back to `PixelFormat.TRANSLUCENT` on the UI thread.
 //!
 //! Touch drives everything (see the shell): drag to use the tool, tap the status bar for
-//! the palette, long-press it for credits, Back to quit. Leaving the app quits it — a
-//! fresh start on return is simpler than rebuilding surfaces Android has torn down.
+//! the palette, long-press it for credits (drag to scroll them), Back to quit. Leaving the
+//! app quits it — a fresh start on return is simpler than rebuilding surfaces Android has
+//! torn down.
 
 use android_activity::AndroidApp;
 use hakai_core::audio::AudioSink;
+use hakai_core::render::HudText;
 use hakai_core::shell::winit::event_loop::{EventLoopBuilder, OwnedDisplayHandle};
 use hakai_core::shell::winit::platform::android::EventLoopBuilderExtAndroid;
 use hakai_core::shell::{Coverage, Platform, ShellEvent};
@@ -49,8 +51,8 @@ impl Platform for Android {
         Coverage::Fullscreen
     }
 
-    fn hud_hint(&self) -> &'static str {
-        "tap here: tools \u{b7} hold: credits \u{b7} Back: quit"
+    fn hud_text(&self) -> HudText {
+        HudText::TOUCH
     }
 
     fn configure_event_loop(&mut self, builder: &mut EventLoopBuilder<ShellEvent>) {

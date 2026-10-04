@@ -404,7 +404,7 @@ impl State {
             // size isn't known until the first `configure`.
             let assets = Assets::build(
                 device, queue, format, &mut icons, &mut sprites, &mut decals, &mut text, self.hud_colors, 1920.0,
-                hakai_core::render::HUD_HINT_TEXT,
+                hakai_core::render::HudText::KEYBOARD,
             );
             let audio = self.audio.take().unwrap_or_default();
             let mut scene = Scene {
@@ -624,6 +624,10 @@ impl SeatHandler for State {
     fn remove_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat) {}
 }
 
+/// Points the credits scroll per arrow key, and per page.
+const CREDITS_SCROLL_STEP: f32 = 48.0;
+const CREDITS_SCROLL_PAGE: f32 = 400.0;
+
 impl KeyboardHandler for State {
     fn enter(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: &wl_surface::WlSurface, _: u32, _: &[u32], _: &[Keysym]) {}
     fn leave(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: &wl_surface::WlSurface, _: u32) {}
@@ -637,6 +641,25 @@ impl KeyboardHandler for State {
             return;
         }
         let Some(scene) = self.scene.as_mut() else { return };
+        // With the credits open, the arrows and paging keys scroll them (every output's —
+        // the panel is open on all of them at once).
+        if scene.layers.iter().any(|l| l.hud.credits_open()) {
+            let delta = match event.keysym {
+                Keysym::Up => Some(-CREDITS_SCROLL_STEP),
+                Keysym::Down => Some(CREDITS_SCROLL_STEP),
+                Keysym::Page_Up => Some(-CREDITS_SCROLL_PAGE),
+                Keysym::Page_Down | Keysym::space => Some(CREDITS_SCROLL_PAGE),
+                Keysym::Home => Some(f32::MIN),
+                Keysym::End => Some(f32::MAX),
+                _ => None,
+            };
+            if let Some(delta) = delta {
+                for i in 0..scene.layers.len() {
+                    scene.scroll_credits(i, delta);
+                }
+                return;
+            }
+        }
         match event.keysym {
             Keysym::_1 => scene.select_tool(ToolId::Hammer),
             Keysym::_2 => scene.select_tool(ToolId::ChainSaw),
@@ -699,6 +722,13 @@ impl PointerHandler for State {
                         self.pointer_focus = None;
                     }
                 }
+                // The wheel scrolls the credits panel while it's open; `absolute` is already
+                // in surface points, positive = down.
+                PointerEventKind::Axis { vertical, .. } => {
+                    if scene.layers[index].hud.credits_open() && vertical.absolute != 0.0 {
+                        scene.scroll_credits(index, vertical.absolute as f32);
+                    }
+                }
                 PointerEventKind::Motion { .. } => {
                     scene.pointer_moved(index, point);
                 }
@@ -714,7 +744,6 @@ impl PointerHandler for State {
                     }
                     scene.pointer_released(index, point);
                 }
-                _ => {}
             }
         }
     }

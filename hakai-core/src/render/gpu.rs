@@ -361,9 +361,29 @@ const HUD_HINT_SIZE: f32 = 12.0;
 const HUD_TOAST_BOTTOM_MARGIN: f32 = 92.0;
 const HUD_TOAST_SIZE: f32 = 15.0;
 
-/// The status bar's key hint on a keyboard platform. Touch platforms pass their own to
-/// [`Assets::build`].
-pub const HUD_HINT_TEXT: &str = "1\u{2013}9 tool \u{b7} \u{2191}\u{2193} palette \u{b7} M mode \u{b7} C credits \u{b7} R clear \u{b7} Esc quit";
+/// Space kept above and below the credits panel when it's taller than the screen.
+const CREDITS_SCROLL_MARGIN: f32 = 16.0;
+
+/// The platform-dependent bits of HUD text: how to drive hakai from what it has — keys on a
+/// desktop, taps on a phone.
+#[derive(Clone, Copy, Debug)]
+pub struct HudText {
+    /// The status bar's right-hand hint.
+    pub status_hint: &'static str,
+    /// The credits panel's last line.
+    pub credits_close: &'static str,
+}
+
+impl HudText {
+    pub const KEYBOARD: Self = Self {
+        status_hint: "1\u{2013}9 tool \u{b7} \u{2191}\u{2193} palette \u{b7} M mode \u{b7} C credits \u{b7} R clear \u{b7} Esc quit",
+        credits_close: "Press C to close \u{b7} scroll for more",
+    };
+    pub const TOUCH: Self = Self {
+        status_hint: "tap here: tools \u{b7} hold: credits \u{b7} Back: quit",
+        credits_close: "Drag to scroll \u{b7} tap to close",
+    };
+}
 
 // ── Tool palette layout ──────────────────────────────────────────────────────────────────
 
@@ -513,12 +533,21 @@ fn credits_text_color(color: crate::credits::TextColor, hud_colors: &theme::HudC
     }
 }
 
-fn build_credits_pixmap(text: &mut TextRenderer, screen_width: f32, hud_colors: &theme::HudColors) -> tiny_skia::Pixmap {
+fn build_credits_pixmap(
+    text: &mut TextRenderer,
+    screen_width: f32,
+    hud_colors: &theme::HudColors,
+    close_line: &str,
+) -> tiny_skia::Pixmap {
     let char_width = measure_char_width(text, CREDITS_BODY_SIZE);
     let max_width = 960.0_f32.min(screen_width - 120.0);
     let columns = (((max_width - CREDITS_PADDING * 2.0) / char_width).floor() as i64).max(40) as usize;
 
-    let lines = crate::credits::build(columns);
+    let mut lines = crate::credits::build(columns);
+    // The last line says how to close the panel — in this platform's terms.
+    if let Some(last) = lines.last_mut() {
+        last.text = close_line.to_string();
+    }
 
     let width = columns as f32 * char_width + CREDITS_PADDING * 2.0;
     let mut height = CREDITS_PADDING * 2.0;
@@ -818,7 +847,7 @@ impl Assets {
         text: &mut TextRenderer,
         hud_colors: theme::HudColors,
         screen_width: f32,
-        hud_hint: &str,
+        hud_text: HudText,
     ) -> Self {
         let pipelines = create_pipelines(&device, format);
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -873,7 +902,7 @@ impl Assets {
             Some((hud_rgba(hud_colors.foreground, 56), 1.0)),
         );
         let hud_panel = create_hud_gpu(&device, &queue, &pipelines.tile_bind_group_layout, &sampler, &hud_panel_pixmap, String::new());
-        let hud_hint = create_hud_text(&device, &queue, &pipelines.tile_bind_group_layout, &sampler, text, hud_hint, HUD_HINT_SIZE, false, hud_rgba_arr(hud_colors.foreground, 153));
+        let hud_hint = create_hud_text(&device, &queue, &pipelines.tile_bind_group_layout, &sampler, text, hud_text.status_hint, HUD_HINT_SIZE, false, hud_rgba_arr(hud_colors.foreground, 153));
         let initial_label = format!("{} \u{b7} {}", ToolId::Hammer.key_digit(), ToolId::Hammer.display_name());
         let hud_label = create_hud_text(&device, &queue, &pipelines.tile_bind_group_layout, &sampler, text, &initial_label, HUD_LABEL_SIZE, false, hud_rgba_arr(hud_colors.foreground, 255));
 
@@ -908,7 +937,7 @@ impl Assets {
             }
         }
 
-        let credits_pixmap = build_credits_pixmap(text, screen_width, &hud_colors);
+        let credits_pixmap = build_credits_pixmap(text, screen_width, &hud_colors, hud_text.credits_close);
         let (cw, ch) = (credits_pixmap.width() as f32, credits_pixmap.height() as f32);
         let (ct, cv) = create_sprite_texture(&device, &queue, &credits_pixmap);
         let credits_panel = (ct, cv, cw, ch);
@@ -957,6 +986,12 @@ impl Assets {
     }
 
     /// (Re)builds a `GpuLayer`'s damage layer and its GPU tiles at the given point size.
+    /// How far the credits panel can scroll on a screen `screen_height` points tall — 0 when
+    /// it fits (with a margin above and below).
+    pub fn credits_scroll_max(&self, screen_height: f32) -> f32 {
+        (self.credits_panel.3 + 2.0 * CREDITS_SCROLL_MARGIN - screen_height).max(0.0)
+    }
+
     pub fn build_damage(&self, gpu: &mut GpuLayer) {
         let mut damage = DamageLayer::new(gpu.width as f32, gpu.height as f32, gpu.scale);
         damage.mark_all_dirty();
@@ -1169,7 +1204,15 @@ pub fn render(a: &Assets, text: &mut TextRenderer, icons: &mut ToolIcons, show_c
         if credits_alpha > 0.0 {
             let (_, view, w, h) = &a.credits_panel;
             pass.set_pipeline(sprite_pipeline);
-            let center = (screen_px.0 / 2.0, screen_px.1 / 2.0);
+            // Centred when it fits; otherwise top-aligned (with a margin) and shifted up by
+            // the scroll offset.
+            let max = a.credits_scroll_max(screen_px.1);
+            let center_y = if max > 0.0 {
+                CREDITS_SCROLL_MARGIN - gpu.hud.credits_scroll().min(max) + *h / 2.0
+            } else {
+                screen_px.1 / 2.0
+            };
+            let center = (screen_px.0 / 2.0, center_y);
             let ndc = rotated_sprite_ndc(center, (*w, *h), 0.0, screen_px, credits_alpha);
             draw_rotated_sprite(device, &mut pass, sprite_bind_group_layout, sampler, view, &ndc, "credits-panel");
         }

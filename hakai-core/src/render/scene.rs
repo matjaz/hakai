@@ -276,6 +276,15 @@ impl Scene {
         }
     }
 
+    /// Scrolls layer `index`'s credits panel by `delta` points (positive = further down),
+    /// clamped to how far it overflows that layer's screen.
+    pub fn scroll_credits(&mut self, index: usize, delta: f32) {
+        let Some(gpu) = self.layers.get_mut(index) else { return };
+        let max = self.assets.credits_scroll_max(gpu.height as f32);
+        let scroll = gpu.hud.credits_scroll() + delta;
+        gpu.hud.set_credits_scroll(scroll, max);
+    }
+
     pub fn toggle_mode(&mut self) {
         for gpu in &mut self.layers {
             gpu.frozen = !gpu.frozen;

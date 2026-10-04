@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use winit::application::ApplicationHandler;
-use winit::event::{ElementState, MouseButton, Touch, TouchPhase, WindowEvent};
+use winit::event::{ElementState, MouseButton, MouseScrollDelta, Touch, TouchPhase, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopBuilder, EventLoopProxy, OwnedDisplayHandle};
 use winit::keyboard::{Key, KeyCode, ModifiersState, NamedKey, PhysicalKey};
 use winit::monitor::MonitorHandle;
@@ -31,7 +31,7 @@ pub use winit;
 use crate::audio::AudioSink;
 use crate::icons::ToolIcons;
 use crate::render::text::TextRenderer;
-use crate::render::{hud_bar_at, palette_tool_at, Assets, HudColors, Scene, HUD_HINT_TEXT};
+use crate::render::{hud_bar_at, palette_tool_at, Assets, HudColors, HudText, Scene};
 use crate::sprites::SpriteFactory;
 use crate::tools::ToolId;
 use crate::DecalFactory;
@@ -131,10 +131,10 @@ pub trait Platform: 'static {
         false
     }
 
-    /// The status bar's hint text. Keyboard platforms keep the key list; touch-only ones
-    /// explain the tap/long-press controls instead.
-    fn hud_hint(&self) -> &'static str {
-        HUD_HINT_TEXT
+    /// The HUD's how-to text. Keyboard platforms keep the key list; touch-only ones explain
+    /// the tap/long-press/drag controls instead.
+    fn hud_text(&self) -> HudText {
+        HudText::KEYBOARD
     }
 
     /// Adjusts the event loop before it's built (Android hands it the `AndroidApp`).
@@ -149,6 +149,10 @@ pub trait Platform: 'static {
 
 /// How long a press on the status bar has to last to count as a long press (credits).
 const LONG_PRESS: f32 = 0.6;
+/// Below this much finger travel (points), a touch on the credits is a tap, not a drag.
+const TAP_SLOP: f32 = 10.0;
+/// Points the credits scroll per wheel notch / arrow key.
+const SCROLL_STEP: f32 = 48.0;
 
 /// What the finger currently down is doing. One finger at a time drives everything; the
 /// rest are ignored, like a second mouse would be.
@@ -158,6 +162,9 @@ enum TouchRole {
     Tool,
     /// Held on the status bar: a tap opens the palette, a long press the credits.
     Bar(Instant),
+    /// On the open credits panel: a drag scrolls it, a tap closes it. `last_y` is the
+    /// finger's previous height, `travel` how far it has moved in total.
+    Credits { last_y: f32, travel: f32 },
     /// Already handled on touch-down (closing a panel, picking a tool) — swallow the rest.
     Consumed,
 }
@@ -319,7 +326,7 @@ impl<P: Platform> App<P> {
             &mut text,
             hud_colors,
             w0_points,
-            self.platform.hud_hint(),
+            self.platform.hud_text(),
         );
 
         let audio = self.platform.audio();
@@ -382,8 +389,7 @@ impl<P: Platform> App<P> {
                 let layer = &scene.layers[idx];
                 let screen = (layer.width as f32, layer.height as f32);
                 let role = if layer.hud.credits_open() {
-                    scene.toggle_credits();
-                    TouchRole::Consumed
+                    TouchRole::Credits { last_y: p.1, travel: 0.0 }
                 } else if layer.hud.palette_open() {
                     if let Some(tool) = palette_tool_at(p, screen) {
                         scene.select_tool(tool);
@@ -400,11 +406,23 @@ impl<P: Platform> App<P> {
                 self.touch = Some((touch.id, idx, role));
             }
             TouchPhase::Moved => {
-                if let Some((id, layer, TouchRole::Tool)) = self.touch {
-                    if id == touch.id && layer == idx {
+                let Some((id, layer, role)) = self.touch.as_mut() else { return };
+                if *id != touch.id || *layer != idx {
+                    return;
+                }
+                match role {
+                    TouchRole::Tool => {
                         self.cursor = p;
                         scene.pointer_moved(idx, p);
                     }
+                    // Content follows the finger: dragging up scrolls further down.
+                    TouchRole::Credits { last_y, travel } => {
+                        let delta = *last_y - p.1;
+                        scene.scroll_credits(idx, delta);
+                        *travel += delta.abs();
+                        *last_y = p.1;
+                    }
+                    _ => {}
                 }
             }
             TouchPhase::Ended | TouchPhase::Cancelled => {
@@ -417,7 +435,8 @@ impl<P: Platform> App<P> {
                     TouchRole::Tool => scene.pointer_released(idx, p),
                     TouchRole::Bar(since) if since.elapsed().as_secs_f32() >= LONG_PRESS => scene.toggle_credits(),
                     TouchRole::Bar(_) => scene.set_palette_visible(true),
-                    TouchRole::Consumed => {}
+                    TouchRole::Credits { travel, .. } if travel < TAP_SLOP => scene.toggle_credits(),
+                    TouchRole::Credits { .. } | TouchRole::Consumed => {}
                 }
             }
         }
@@ -510,6 +529,23 @@ impl<P: Platform> ApplicationHandler<ShellEvent> for App<P> {
                     return;
                 }
                 let shift = self.modifiers.contains(ModifiersState::SHIFT);
+                // With the credits open, the arrows and paging keys scroll them.
+                if let Some(i) = idx.filter(|&i| scene.layers[i].hud.credits_open()) {
+                    let page = scene.layers[i].height as f32 * 0.8;
+                    let delta = match code {
+                        KeyCode::ArrowUp => Some(-SCROLL_STEP),
+                        KeyCode::ArrowDown => Some(SCROLL_STEP),
+                        KeyCode::PageUp => Some(-page),
+                        KeyCode::PageDown | KeyCode::Space => Some(page),
+                        KeyCode::Home => Some(f32::MIN),
+                        KeyCode::End => Some(f32::MAX),
+                        _ => None,
+                    };
+                    if let Some(delta) = delta {
+                        scene.scroll_credits(i, delta);
+                        return;
+                    }
+                }
                 match code {
                     KeyCode::Digit1 => scene.select_tool(ToolId::Hammer),
                     KeyCode::Digit2 => scene.select_tool(ToolId::ChainSaw),
@@ -557,6 +593,16 @@ impl<P: Platform> ApplicationHandler<ShellEvent> for App<P> {
             WindowEvent::MouseInput { state: ElementState::Released, button: MouseButton::Left, .. } => {
                 if let Some(idx) = idx {
                     scene.pointer_released(idx, self.cursor);
+                }
+            }
+
+            WindowEvent::MouseWheel { delta, .. } => {
+                if let Some(i) = idx.filter(|&i| scene.layers[i].hud.credits_open()) {
+                    let points = match delta {
+                        MouseScrollDelta::LineDelta(_, y) => -y * SCROLL_STEP,
+                        MouseScrollDelta::PixelDelta(p) => -(p.y as f32) / scene.layers[i].scale.max(0.01),
+                    };
+                    scene.scroll_credits(i, points);
                 }
             }
 
