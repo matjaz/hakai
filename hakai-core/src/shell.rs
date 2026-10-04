@@ -224,8 +224,10 @@ impl<P: Platform> App<P> {
         for m in &make_windows {
             let attrs = self.overlay_attributes(m.as_ref(), windowed);
             let w = Arc::new(event_loop.create_window(attrs).expect("create_window"));
-            w.set_cursor_visible(false);
+            // Platform styling first: on macOS it re-frames the window, which would reset
+            // the cursor rects winit hides the cursor with.
             self.platform.window_created(&w, m.as_ref(), windowed);
+            w.set_cursor_visible(false);
             log::info!("window {:?}: {:?} @ scale {}", w.id(), w.inner_size(), w.scale_factor());
             self.windows.push(w);
         }

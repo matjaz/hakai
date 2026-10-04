@@ -119,13 +119,20 @@ pub fn make_overlay(window: &Window, monitor: Option<&MonitorHandle>, windowed: 
     }
 }
 
-/// Brings the app to the front and hides the Dock and the menu bar while it runs — the
-/// window already sits above both, this just stops them reacting underneath it.
+/// Brings the app to the front, hides the Dock and the menu bar while it runs — the
+/// window already sits above both, this just stops them reacting underneath it — and
+/// hides the system cursor (the tool is drawn as the cursor).
+///
+/// `NSCursor.hide` is what the Swift original used too: winit's `set_cursor_visible`
+/// works through per-window cursor rects, which a shielding-level borderless window over
+/// the whole screen doesn't reliably keep. The hide is app-wide while hakai is active and
+/// ends with the process.
 pub fn take_over_screen() {
     unsafe {
         let app: *mut AnyObject = msg_send![class!(NSApplication), sharedApplication];
         let _: () = msg_send![app, activateIgnoringOtherApps: true];
         let options = HIDE_DOCK | HIDE_MENU_BAR;
         let _: () = msg_send![app, setPresentationOptions: options];
+        let _: () = msg_send![class!(NSCursor), hide];
     }
 }
