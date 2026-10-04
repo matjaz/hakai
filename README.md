@@ -151,6 +151,19 @@ cargo run --release --manifest-path hakai-mac/Cargo.toml   # run it
 hakai-mac/package.sh                                        # build the universal release DMG
 ```
 
+## Releases
+
+CI builds and packages every platform on each push — Linux tarballs (x86_64, aarch64),
+the Windows zip and the universal macOS DMG — and keeps them as workflow artifacts for two
+weeks. Pushing a `v*` tag additionally publishes those same artifacts (plus `SHA256SUMS`)
+as a GitHub release, without rebuilding anything. The tag has to match the crates'
+`version` (`v0.0.1` ↔ `0.0.1` in `hakai`, `hakai-win` and `hakai-mac`), or the release
+job refuses.
+
+```sh
+git tag v0.0.1 && git push origin v0.0.1
+```
+
 ## Layout
 
 ```

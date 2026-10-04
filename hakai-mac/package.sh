@@ -48,7 +48,10 @@ printf 'APPL????' > "$APP/Contents/PkgInfo"
 # sips/iconutil make every size of the .icns from it.
 ICONSET="$TARGET_DIR/AppIcon.iconset"
 rm -rf "$ICONSET" && mkdir -p "$ICONSET"
-cargo run --release --locked --manifest-path "$MANIFEST" --example app_icon -- "$TARGET_DIR/app_icon.png"
+# --target = the host triple, so the example reuses that arch's dependency build above
+# instead of compiling everything a third time in the plain target/release dir.
+HOST="$(rustc -vV | sed -n 's/^host: //p')"
+cargo run --release --locked --manifest-path "$MANIFEST" --target "$HOST" --example app_icon -- "$TARGET_DIR/app_icon.png"
 for size in 16 32 128 256 512; do
     sips -z "$size" "$size" "$TARGET_DIR/app_icon.png" --out "$ICONSET/icon_${size}x${size}.png" >/dev/null
     sips -z $((size * 2)) $((size * 2)) "$TARGET_DIR/app_icon.png" --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
@@ -69,7 +72,12 @@ cp LICENSE "$STAGE/LICENSE.txt"
 cp CREDITS.md "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
 
-hdiutil create -volname "Hakai" -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov "$DMG" >/dev/null
+# hdiutil intermittently fails with "Resource busy" on CI runners — retry a few times.
+for attempt in 1 2 3; do
+    hdiutil create -volname "Hakai" -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov "$DMG" >/dev/null && break
+    [ "$attempt" = 3 ] && { echo "hdiutil create failed" >&2; exit 1; }
+    sleep 5
+done
 if [ "$IDENTITY" != "-" ]; then
     codesign --force --sign "$IDENTITY" --timestamp "$DMG"
     if [ -n "${NOTARY_PROFILE:-}" ]; then

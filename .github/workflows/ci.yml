@@ -1,8 +1,12 @@
 name: CI
 
+# Every build job below also packages its platform's release artifact and uploads it, so
+# a `v*` tag push builds each binary exactly once: the `release` job at the bottom only
+# collects those artifacts and publishes them — it never compiles anything itself.
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
 
 jobs:
@@ -38,23 +42,38 @@ jobs:
   # accepting hakai's layer-shell surface) genuinely deferred, not attempted here: it needs
   # to be worked out and verified against a real setup before it's worth scripting into CI,
   # not guessed at blind.
+  #
+  # Both architectures: x86_64 and aarch64 (Omarchy on ARM), each on a native runner.
   hakai-build:
-    name: hakai (binary — build only, no compositor in CI)
-    runs-on: ubuntu-latest
+    name: hakai (Linux ${{ matrix.arch }} — build + package, no compositor in CI)
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - { arch: x86_64, runner: ubuntu-latest }
+          - { arch: aarch64, runner: ubuntu-24.04-arm }
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: hakai
+          key: ${{ matrix.arch }}
 
       - name: Install Wayland/xkbcommon/ALSA/Vulkan dev headers
         run: |
           sudo apt-get update
           sudo apt-get install -y libwayland-dev libxkbcommon-dev libasound2-dev libvulkan-dev pkg-config
 
-      - name: cargo build --release
-        run: cargo build --release --manifest-path hakai/Cargo.toml --locked
+      - name: Build + package (hakai/package.sh)
+        run: hakai/package.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hakai-linux-${{ matrix.arch }}
+          path: hakai/target/hakai-*-linux.tar.gz
+          if-no-files-found: error
+          retention-days: 14
 
   # hakai-win (the Windows binary). windows-latest ships the MSVC toolchain, so no setup
   # beyond rustup. Build-only: GitHub's runners have no interactive desktop session, so
@@ -64,7 +83,7 @@ jobs:
   # on Linux. hakai-core's own tests run on Windows here too, cheaply, as a cross-check
   # that the headless core stays platform-clean.
   hakai-win:
-    name: hakai-win (Windows binary — build only, no desktop in CI)
+    name: hakai-win (Windows binary — build + package, no desktop in CI)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -76,14 +95,23 @@ jobs:
       - name: cargo test (hakai-core, on Windows)
         run: cargo test --manifest-path hakai-core/Cargo.toml --locked
 
-      - name: cargo build --release (hakai-win)
-        run: cargo build --release --manifest-path hakai-win/Cargo.toml --locked
+      - name: Build + package (hakai-win/package.ps1)
+        shell: pwsh
+        run: ./hakai-win/package.ps1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hakai-win
+          path: hakai-win/target/hakai-win-*.zip
+          if-no-files-found: error
+          retention-days: 14
 
   # hakai-mac (the macOS binary). Build-only for the same reason as hakai-win: no
   # interactive session on the runner, so the overlay, Metal surface and screen capture
   # compile but never run. Both architectures, since the release DMG is a universal binary.
+  # Ad-hoc signed — there's no Developer ID in CI (see hakai-mac/package.sh to add one).
   hakai-mac:
-    name: hakai-mac (macOS binary — build only, universal)
+    name: hakai-mac (macOS binary — build + package, universal DMG)
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -94,7 +122,55 @@ jobs:
         with:
           workspaces: hakai-mac
 
-      - name: cargo build --release (hakai-mac, arm64 + x86_64)
+      - name: Build + package (hakai-mac/package.sh — arm64 + x86_64 → universal DMG)
+        run: hakai-mac/package.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hakai-mac
+          path: hakai-mac/target/hakai-mac-*.dmg
+          if-no-files-found: error
+          retention-days: 14
+
+  # Tag pushes only: gather the artifacts the jobs above already built and publish them as
+  # a GitHub release. The tag must match the crates' version (v0.0.1 ↔ version = "0.0.1"),
+  # since that version is what the artifact file names carry.
+  release:
+    name: Release (v* tags)
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [hakai-core, hakai-build, hakai-win, hakai-mac]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag matches the crate versions
         run: |
-          cargo build --release --manifest-path hakai-mac/Cargo.toml --locked --target aarch64-apple-darwin
-          cargo build --release --manifest-path hakai-mac/Cargo.toml --locked --target x86_64-apple-darwin
+          want="${GITHUB_REF_NAME#v}"
+          for m in hakai hakai-win hakai-mac; do
+            got="$(sed -nE 's/^version *= *"([^"]+)".*/\1/p' "$m/Cargo.toml" | head -1)"
+            if [ "$got" != "$want" ]; then
+              echo "::error::$GITHUB_REF_NAME doesn't match $m/Cargo.toml version $got"
+              exit 1
+            fi
+          done
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum * | tee SHA256SUMS
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Hakai $GITHUB_REF_NAME" \
+            --generate-notes \
+            --verify-tag
