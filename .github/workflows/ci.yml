@@ -133,7 +133,7 @@ jobs:
           retention-days: 14
 
   # Tag pushes only: gather the artifacts the jobs above already built and publish them as
-  # a GitHub release. The tag must match the crates' version (v0.0.1 ↔ version = "0.0.1"),
+  # a GitHub release. The tag must match the crates' version (v1.0.0 ↔ version = "1.0.0"),
   # since that version is what the artifact file names carry.
   release:
     name: Release (v* tags)

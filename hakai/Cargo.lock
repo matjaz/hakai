@@ -648,7 +648,7 @@ dependencies = [
 
 [[package]]
 name = "hakai"
-version = "0.0.1"
+version = "1.0.0"
 dependencies = [
  "bytemuck",
  "calloop",
@@ -671,7 +671,7 @@ dependencies = [
 
 [[package]]
 name = "hakai-core"
-version = "0.0.1"
+version = "1.0.0"
 dependencies = [
  "bytemuck",
  "cosmic-text",
