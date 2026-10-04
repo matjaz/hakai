@@ -118,6 +118,14 @@ pub trait Platform: 'static {
         None
     }
 
+    /// Where the pointer is right now, in `window`'s physical pixels from its top-left, or
+    /// `None` if it isn't over `window` (or the platform can't tell). Asked once at
+    /// startup: a window that appears under a pointer that isn't moving gets no motion
+    /// event, so without this the tool cursor would wait for the first nudge.
+    fn cursor_position(&self, _window: &Window) -> Option<(f64, f64)> {
+        None
+    }
+
     /// A platform quit chord on top of Esc (⌘Q on macOS).
     fn is_quit_key(&self, _code: KeyCode, _modifiers: ModifiersState) -> bool {
         false
@@ -292,6 +300,18 @@ impl<P: Platform> App<P> {
         }
         scene.select_tool(ToolId::Hammer);
 
+        // Put the tool cursor under the real pointer from the first frame.
+        for (i, w) in self.windows.iter().enumerate() {
+            if let Some((x, y)) = self.platform.cursor_position(w) {
+                let scale = scene.layers[i].scale.max(0.01);
+                self.cursor = (x as f32 / scale, y as f32 / scale);
+                scene.layers[i].mouse = self.cursor;
+                scene.focused_layer = Some(i);
+                log::info!("pointer starts at {:?} (points) on layer {i}", self.cursor);
+                break;
+            }
+        }
+
         self.capture = self.platform.capture(&self.windows);
         self.platform.started(&self.windows, windowed);
         self._gpu = Some((instance, adapter));
@@ -396,9 +416,11 @@ impl<P: Platform> ApplicationHandler<ShellEvent> for App<P> {
                 }
             }
 
-            WindowEvent::CursorEntered { .. } => {
-                scene.focused_layer = idx;
-            }
+            // Entering doesn't show the tool cursor yet: winit's CursorEntered carries no
+            // position, and drawing at the layer's last-known one put it at (0, 0) — the
+            // top-left corner — until the first move. CursorMoved (which follows right
+            // away when the pointer really moves in) is what focuses the layer.
+            WindowEvent::CursorEntered { .. } => {}
             WindowEvent::CursorLeft { .. } => {
                 if scene.focused_layer == idx {
                     scene.focused_layer = None;

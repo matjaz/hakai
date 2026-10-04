@@ -9,7 +9,7 @@ use std::ffi::c_void;
 
 use objc2::runtime::AnyObject;
 use objc2::{class, msg_send};
-use objc2_foundation::NSRect;
+use objc2_foundation::{NSPoint, NSRect};
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use hakai_core::shell::winit::monitor::MonitorHandle;
 use hakai_core::shell::winit::platform::macos::MonitorHandleExtMacOS;
@@ -90,6 +90,24 @@ pub fn window_number(window: &Window) -> Option<u32> {
     let win = ns_window(window)?;
     let n: isize = unsafe { msg_send![win, windowNumber] };
     (n > 0).then_some(n as u32)
+}
+
+/// The pointer's position in `window`, in physical pixels from its top-left, or `None`
+/// when it's outside. `mouseLocationOutsideOfEventStream` is in window points with the
+/// origin bottom-left.
+pub fn cursor_position(window: &Window) -> Option<(f64, f64)> {
+    let win = ns_window(window)?;
+    unsafe {
+        let p: NSPoint = msg_send![win, mouseLocationOutsideOfEventStream];
+        let view: *mut AnyObject = msg_send![win, contentView];
+        let bounds: NSRect = msg_send![view, bounds];
+        let (w, h) = (bounds.size.width, bounds.size.height);
+        if !(0.0..w).contains(&p.x) || !(0.0..h).contains(&p.y) {
+            return None;
+        }
+        let scale = window.scale_factor();
+        Some((p.x * scale, (h - p.y) * scale))
+    }
 }
 
 /// Turns a plain winit window into the overlay: screensaver level, every Space, no shadow,

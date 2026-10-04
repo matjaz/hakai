@@ -77,6 +77,10 @@ impl Platform for Mac {
         theme::read_hud_colors()
     }
 
+    fn cursor_position(&self, window: &Window) -> Option<(f64, f64)> {
+        macos::cursor_position(window)
+    }
+
     fn is_quit_key(&self, code: KeyCode, modifiers: ModifiersState) -> bool {
         code == KeyCode::KeyQ && modifiers.super_key()
     }

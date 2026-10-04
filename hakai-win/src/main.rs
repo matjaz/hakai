@@ -82,6 +82,10 @@ impl Platform for Win {
         win32::spawn_quit_hotkey(move || quit.quit());
     }
 
+    fn cursor_position(&self, window: &Window) -> Option<(f64, f64)> {
+        win32::cursor_position(window)
+    }
+
     fn paint_colors(&self) -> Option<[(f32, f32, f32); 8]> {
         theme::read_paint_colors()
     }

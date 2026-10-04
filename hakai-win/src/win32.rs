@@ -3,7 +3,8 @@
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use hakai_core::shell::winit::window::Window;
 use windows::core::BOOL;
-use windows::Win32::Foundation::{CloseHandle, COLORREF, HWND, LPARAM};
+use windows::Win32::Foundation::{CloseHandle, COLORREF, HWND, LPARAM, POINT, RECT};
+use windows::Win32::Graphics::Gdi::ScreenToClient;
 use windows::Win32::System::Console::GetConsoleWindow;
 use windows::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
@@ -11,7 +12,7 @@ use windows::Win32::System::Diagnostics::ToolHelp::{
 use windows::Win32::System::Threading::GetCurrentProcessId;
 use windows::Win32::UI::Input::KeyboardAndMouse::{RegisterHotKey, MOD_NOREPEAT, VK_ESCAPE};
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetForegroundWindow, GetMessageW, GetWindow, GetWindowLongPtrW,
+    EnumWindows, GetClientRect, GetCursorPos, GetForegroundWindow, GetMessageW, GetWindow, GetWindowLongPtrW,
     GetWindowThreadProcessId, IsWindowVisible, SetLayeredWindowAttributes, SetWindowLongPtrW,
     ShowWindowAsync, GWL_EXSTYLE, GW_OWNER, LWA_ALPHA, MSG, SW_MINIMIZE, WM_HOTKEY, WS_EX_LAYERED,
 };
@@ -20,6 +21,22 @@ fn hwnd_of(window: &Window) -> Option<HWND> {
     match window.window_handle().ok()?.as_raw() {
         RawWindowHandle::Win32(h) => Some(HWND(h.hwnd.get() as *mut _)),
         _ => None,
+    }
+}
+
+/// The pointer's position in `window`'s client area, in physical pixels (the process is
+/// Per-Monitor-DPI-v2 aware, so no virtualised coordinates), or `None` when it's outside.
+pub fn cursor_position(window: &Window) -> Option<(f64, f64)> {
+    let hwnd = hwnd_of(window)?;
+    unsafe {
+        let mut p = POINT::default();
+        GetCursorPos(&mut p).ok()?;
+        if !ScreenToClient(hwnd, &mut p).as_bool() {
+            return None;
+        }
+        let mut r = RECT::default();
+        GetClientRect(hwnd, &mut r).ok()?;
+        ((r.left..r.right).contains(&p.x) && (r.top..r.bottom).contains(&p.y)).then_some((p.x as f64, p.y as f64))
     }
 }
 
