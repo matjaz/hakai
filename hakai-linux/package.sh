@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 #
-# Builds hakai (the Linux binary) and assembles the release tarball.
+# Builds hakai-linux (the `hakai` command) and assembles the release tarball.
 #
-#   hakai/package.sh
+#   hakai-linux/package.sh
 #
 # Output, all from one cargo build:
 #
-#   hakai/target/hakai-<version>-<arch>-linux.tar.gz — the stripped binary (fonts and all
+#   hakai-linux/target/hakai-<version>-linux-<arch>.tar.gz — the stripped binary (fonts and all
 #       35 sounds are compiled in), hakai.desktop + a 256 px icon, the Hyprland keybind
 #       example, README.md, LICENSE and CREDITS.md
-#   hakai/target/hakai_<version>-1_<amd64|arm64>.deb  — Debian, Ubuntu, Mint, …
-#   hakai/target/hakai-<version>-1.<x86_64|aarch64>.rpm — Fedora, openSUSE, …
+#   hakai-linux/target/hakai_<version>-1_<amd64|arm64>.deb  — Debian, Ubuntu, Mint, …
+#   hakai-linux/target/hakai-<version>-1.<x86_64|aarch64>.rpm — Fedora, openSUSE, …
 #
 # The .deb/.rpm are the same binary wrapped by nfpm (https://nfpm.goreleaser.com) — only
 # the format and the distro's dependency names differ. They're skipped, with a note, when
@@ -22,8 +22,8 @@
 # libxkbcommon and libasound directly; libwayland-client, the Vulkan loader and (for the
 # GNOME/X11 fallback) the X11 libraries and EGL are dlopen'd at runtime.
 #
-# Run from anywhere; cargo is invoked from the repo root, so hakai/.cargo/config.toml's
-# dev-machine target-dir override doesn't apply — output lands in hakai/target, or in
+# Run from anywhere; cargo is invoked from the repo root, so hakai-linux/.cargo/config.toml's
+# dev-machine target-dir override doesn't apply — output lands in hakai-linux/target, or in
 # $CARGO_TARGET_DIR when set (e.g. to keep the build off a shared mount).
 
 set -euo pipefail
@@ -31,11 +31,11 @@ set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO"
 
-MANIFEST=hakai/Cargo.toml
-TARGET_DIR="${CARGO_TARGET_DIR:-hakai/target}"
+MANIFEST=hakai-linux/Cargo.toml
+TARGET_DIR="${CARGO_TARGET_DIR:-hakai-linux/target}"
 VERSION="$(sed -nE 's/^version *= *"([^"]+)".*/\1/p' "$MANIFEST" | head -1)"
 [ -n "$VERSION" ] || { echo "couldn't read version from $MANIFEST" >&2; exit 1; }
-NAME="hakai-$VERSION-$(uname -m)-linux"
+NAME="hakai-$VERSION-linux-$(uname -m)"
 STAGE="$TARGET_DIR/$NAME"
 TARBALL="$TARGET_DIR/$NAME.tar.gz"
 

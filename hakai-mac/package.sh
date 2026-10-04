@@ -4,7 +4,7 @@
 #
 #   hakai-mac/package.sh
 #
-# Output: hakai-mac/target/hakai-mac-<version>-universal-macos.dmg — Hakai.app (one
+# Output: hakai-mac/target/hakai-<version>-macos-universal.dmg — Hakai.app (one
 # universal arm64 + x86_64 binary; fonts and all 35 sounds are compiled in) next to an
 # /Applications link, README.txt, LICENSE.txt and CREDITS.md.
 #
@@ -22,7 +22,7 @@ MANIFEST=hakai-mac/Cargo.toml
 TARGET_DIR=hakai-mac/target
 VERSION="$(sed -nE 's/^version *= *"([^"]+)".*/\1/p' "$MANIFEST" | head -1)"
 [ -n "$VERSION" ] || { echo "couldn't read version from $MANIFEST" >&2; exit 1; }
-NAME="hakai-mac-$VERSION-universal-macos"
+NAME="hakai-$VERSION-macos-universal"
 STAGE="$TARGET_DIR/$NAME"
 APP="$STAGE/Hakai.app"
 DMG="$TARGET_DIR/$NAME.dmg"
@@ -38,9 +38,9 @@ done
 rm -rf "$STAGE" "$DMG"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
-lipo -create -output "$APP/Contents/MacOS/hakai-mac" \
-    "$TARGET_DIR/aarch64-apple-darwin/release/hakai-mac" \
-    "$TARGET_DIR/x86_64-apple-darwin/release/hakai-mac"
+lipo -create -output "$APP/Contents/MacOS/hakai" \
+    "$TARGET_DIR/aarch64-apple-darwin/release/hakai" \
+    "$TARGET_DIR/x86_64-apple-darwin/release/hakai"
 sed "s/@VERSION@/$VERSION/g" hakai-mac/Info.plist > "$APP/Contents/Info.plist"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 

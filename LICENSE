@@ -22,7 +22,7 @@ SOFTWARE.
 
 ---
 
-This license covers the source code in this repository (`hakai/`, `hakai-core/`).
+This license covers the source code in this repository (`hakai-linux/`, `hakai-win/`, `hakai-mac/`, `hakai-core/`).
 The bundled fonts and sounds are separately licensed under their own terms
 (SIL OFL 1.1 for the fonts, a mix of CC BY 4.0 / CC0 / Public Domain for the
 sounds) — see `CREDITS.md` for the full, per-file breakdown.

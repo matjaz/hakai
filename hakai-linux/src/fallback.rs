@@ -15,7 +15,7 @@ use hakai_core::render::HudColors;
 use hakai_core::shell::winit::event_loop::OwnedDisplayHandle;
 use hakai_core::shell::{Coverage, Platform};
 
-use crate::{audio, theme};
+use crate::theme;
 
 struct Linux {
     /// No Wayland connection at all — winit will be on X11.
@@ -39,16 +39,7 @@ impl Platform for Linux {
     }
 
     fn audio(&mut self) -> AudioSink {
-        match audio::CpalBackend::new() {
-            Some(backend) => {
-                log::info!("audio: cpal backend started");
-                AudioSink::with_backend(Box::new(backend))
-            }
-            None => {
-                log::warn!("audio: no backend — running silent");
-                AudioSink::new()
-            }
-        }
+        hakai_core::playback::sink()
     }
 
     fn coverage(&self) -> Coverage {

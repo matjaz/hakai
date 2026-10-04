@@ -7,8 +7,9 @@ license = "MIT"
 repository = "https://github.com/matjaz/hakai"
 readme = "../README.md"
 
+# The binary inside Hakai.app is `hakai`; `hakai-mac` is just the crate.
 [[bin]]
-name = "hakai-mac"
+name = "hakai"
 path = "src/main.rs"
 
 [profile.release]
@@ -18,7 +19,7 @@ strip = true
 # The headless core plus — behind its `shell` feature — the renderer, scene and the winit
 # shell (windows, event loop, input) shared with the Windows build. This crate is just
 # the macOS hooks: window level, CoreGraphics capture, ⌘Q.
-hakai-core = { path = "../hakai-core", features = ["shell"] }
+hakai-core = { path = "../hakai-core", features = ["shell", "playback"] }
 
 # Only the instance setup names wgpu here. Metal offers a non-opaque CAMetalLayer
 # (PostMultiplied), which is all a transparent overlay needs on macOS.
@@ -28,10 +29,7 @@ raw-window-handle = "0.6"
 env_logger = "0.11"
 log = "0.4"
 
-# Real audio — hakai's audio.rs, #[path]-included verbatim as on Windows. cpal picks the
-# CoreAudio host on macOS; hound decodes the bundled WAVs.
-cpal = "0.18"
-hound = "3"
+# Audio comes from hakai-core's `playback` feature (cpal picks the CoreAudio host here).
 
 # AppKit escape hatches — the window level, Spaces behaviour and frame that winit doesn't
 # expose. Plain msg_send! on raw pointers; no typed AppKit bindings needed.

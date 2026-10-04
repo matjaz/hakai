@@ -836,16 +836,33 @@ dependencies = [
 ]
 
 [[package]]
-name = "hakai"
+name = "hakai-core"
+version = "1.1.0"
+dependencies = [
+ "bytemuck",
+ "cosmic-text",
+ "cpal",
+ "hound",
+ "log",
+ "pollster",
+ "raw-window-handle",
+ "serde",
+ "serde_json",
+ "tiny-skia",
+ "ttf-parser 0.24.1",
+ "wgpu",
+ "winit",
+]
+
+[[package]]
+name = "hakai-linux"
 version = "1.1.0"
 dependencies = [
  "bytemuck",
  "calloop",
  "calloop-wayland-source",
- "cpal",
  "env_logger",
  "hakai-core",
- "hound",
  "log",
  "pollster",
  "raw-window-handle",
@@ -856,23 +873,6 @@ dependencies = [
  "wayland-protocols",
  "wayland-protocols-wlr",
  "wgpu",
-]
-
-[[package]]
-name = "hakai-core"
-version = "1.1.0"
-dependencies = [
- "bytemuck",
- "cosmic-text",
- "log",
- "pollster",
- "raw-window-handle",
- "serde",
- "serde_json",
- "tiny-skia",
- "ttf-parser 0.24.1",
- "wgpu",
- "winit",
 ]
 
 [[package]]

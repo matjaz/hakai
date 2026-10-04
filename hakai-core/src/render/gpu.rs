@@ -1,4 +1,4 @@
-//! The wgpu renderer — ported from `hakai/src/main.rs` (the Linux binary's Phase 4 draw
+//! The wgpu renderer — ported from the Linux binary's `main.rs` (the Linux binary's Phase 4 draw
 //! code), against wgpu 30 rather than 22. The *logic* is unchanged: a tiled damage layer
 //! as GPU textures, an axis-aligned tile pipeline and a rotatable-sprite pipeline sharing
 //! one shader module, procedural HUD/palette/credits pixmaps uploaded once, and one

@@ -80,7 +80,7 @@ sudo apt install ./hakai_<version>-1_amd64.deb        # Debian, Ubuntu, Mint, �
 sudo dnf install ./hakai-<version>-1.x86_64.rpm       # Fedora, openSUSE (zypper), …
 ```
 
-(`arm64`/`aarch64` for ARM.) Or the tarball, `hakai-<version>-<arch>-linux.tar.gz` —
+(`arm64`/`aarch64` for ARM.) Or the tarball, `hakai-<version>-linux-<arch>.tar.gz` —
 the binary, a `.desktop` entry and its icon: `install -Dm755 hakai ~/.local/bin/hakai`,
 plus `hakai.desktop` → `~/.local/share/applications/` and `hakai.png` →
 `~/.local/share/icons/hicolor/256x256/apps/` for a launcher entry. Either way it needs
@@ -121,7 +121,7 @@ For working on the Linux binary itself, rather than installing it (the Windows a
 build commands are in their own sections below):
 
 ```bash
-cd hakai
+cd hakai-linux
 cargo build --release
 cargo run --release
 ```
@@ -156,7 +156,7 @@ same nine tools, `cpal`/WASAPI audio, and DXGI Desktop Duplication standing in f
 no coherent system theme to read.
 
 Download the portable `.zip` from the releases page (or build it — see below), extract it
-anywhere, and run `hakai-win.exe`. Nothing to install; the fonts and all 35 sounds are
+anywhere, and run `hakai.exe`. Nothing to install; the fonts and all 35 sounds are
 compiled into the binary. It's unsigned, so SmartScreen shows once — *More info* → *Run
 anyway*. See [`hakai-win/README.txt`](hakai-win/README.txt) for the key list and notes.
 
@@ -204,12 +204,17 @@ hakai-mac/package.sh                                        # build the universa
 
 ## Releases
 
+Every platform's release file follows one pattern —
+`hakai-<version>-linux-<arch>.tar.gz`, `hakai-<version>-windows-x86_64.zip`,
+`hakai-<version>-macos-universal.dmg` — and the `.deb`/`.rpm` keep their distros' own
+naming. The program itself is `hakai` everywhere (`hakai.exe`, `Hakai.app`).
+
 CI builds and packages every platform on each push — Linux `.deb`, `.rpm` and tarball
 (x86_64, aarch64; one build each, wrapped three ways by
 [nfpm](https://nfpm.goreleaser.com)), the Windows zip and the universal macOS DMG — and keeps them as workflow artifacts for two
 weeks. Pushing a `v*` tag additionally publishes those same artifacts (plus `SHA256SUMS`)
 as a GitHub release, without rebuilding anything. The tag has to match the crates'
-`version` (`v1.0.0` ↔ `1.0.0` in `hakai`, `hakai-win` and `hakai-mac`), or the release
+`version` (`v1.0.0` ↔ `1.0.0` in `hakai-linux`, `hakai-win` and `hakai-mac`), or the release
 job refuses.
 
 ```sh
@@ -219,9 +224,9 @@ git tag v1.0.0 && git push origin v1.0.0
 ## Layout
 
 ```
-hakai/         the Linux binary — wlr-layer-shell surfaces, Wayland input, cpal audio,
-               wlr-screencopy capture, Omarchy theme integration, and the winit fallback
-               for GNOME/X11; package.sh → tarball, .deb, .rpm
+hakai-linux/   the Linux binary (the `hakai` command) — wlr-layer-shell surfaces, Wayland
+               input, wlr-screencopy capture, Omarchy theme integration, and the winit
+               fallback for GNOME/X11; package.sh → tarball, .deb, .rpm
 hakai-win/     the Windows binary — a DirectComposition overlay, winit, DXGI Desktop
                Duplication; package.ps1 → portable zip
 hakai-mac/     the macOS binary — a screensaver-level Metal overlay, winit, CoreGraphics
@@ -229,9 +234,9 @@ hakai-mac/     the macOS binary — a screensaver-level Metal overlay, winit, Co
 hakai-core/    the shared library — headless by default (tiled damage layer, procedural
                decal/icon/sprite generators, all nine tools, termite colony, particles,
                HUD/credits logic); its `render` feature adds the wgpu renderer, HUD text
-               and the per-output scene all three binaries draw with, and `shell` the
-               winit window/event-loop/input shell behind Windows, macOS and the Linux
-               fallback
+               and the per-output scene all three binaries draw with, `shell` the winit
+               window/event-loop/input shell behind Windows, macOS and the Linux
+               fallback, and `playback` the cpal audio engine with all 35 sounds
 packaging/     PKGBUILD (AUR, -git), .desktop entry, Hyprland keybind snippet
 ```
 

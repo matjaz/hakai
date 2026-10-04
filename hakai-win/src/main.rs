@@ -27,9 +27,6 @@ mod duplication;
 mod theme;
 mod win32;
 
-#[path = "../../hakai/src/audio.rs"]
-mod audio;
-
 struct Win;
 
 impl Platform for Win {
@@ -45,16 +42,7 @@ impl Platform for Win {
     }
 
     fn audio(&mut self) -> AudioSink {
-        match audio::CpalBackend::new() {
-            Some(backend) => {
-                log::info!("audio: cpal backend started");
-                AudioSink::with_backend(Box::new(backend))
-            }
-            None => {
-                log::warn!("audio: no backend — running silent");
-                AudioSink::new()
-            }
-        }
+        hakai_core::playback::sink()
     }
 
     /// `WS_EX_NOREDIRECTIONBITMAP` is what makes the DirectComposition presentation path

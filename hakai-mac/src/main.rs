@@ -23,9 +23,6 @@ mod duplication;
 mod macos;
 mod theme;
 
-#[path = "../../hakai/src/audio.rs"]
-mod audio;
-
 struct Mac;
 
 impl Platform for Mac {
@@ -40,16 +37,7 @@ impl Platform for Mac {
     }
 
     fn audio(&mut self) -> AudioSink {
-        match audio::CpalBackend::new() {
-            Some(backend) => {
-                log::info!("audio: cpal backend started");
-                AudioSink::with_backend(Box::new(backend))
-            }
-            None => {
-                log::warn!("audio: no backend — running silent");
-                AudioSink::new()
-            }
-        }
+        hakai_core::playback::sink()
     }
 
     /// Lifts each window above the menu bar and snaps it to the screen's full frame.

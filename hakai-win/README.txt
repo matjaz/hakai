@@ -10,7 +10,7 @@ A full-screen, transparent, always-on-top overlay sits above your real desktop.
 Running
 -------
 
-Double-click hakai-win.exe. That's it — nothing to install, no dependencies.
+Double-click hakai.exe. That's it — nothing to install, no dependencies.
 
 SmartScreen ("Windows protected your PC") may show once, because this build is
 unsigned: click "More info" -> "Run anyway".

@@ -27,7 +27,7 @@ depends=(
   'hyprland'          # this is a wlr-layer-shell overlay relying on Hyprland-specific exclusive-keyboard-grab behavior — see OMARCHY-PORT.md's explicit non-goals (other compositors are out of scope)
 )
 optdepends=(
-  'omarchy: theme-aware paint palette and HUD colours (falls back to a built-in palette cleanly without it — see hakai/PHASE7.md)'
+  'omarchy: theme-aware paint palette and HUD colours (falls back to a built-in palette cleanly without it — see hakai-linux/PHASE7.md)'
 )
 makedepends=('cargo' 'git')
 provides=('hakai')
@@ -38,7 +38,7 @@ sha256sums=('SKIP') # VCS source — nothing to checksum ahead of time; standard
 pkgver() {
   cd "$srcdir/$pkgname"
   local base
-  base=$(grep -m1 '^version' hakai/Cargo.toml | cut -d'"' -f2)
+  base=$(grep -m1 '^version' hakai-linux/Cargo.toml | cut -d'"' -f2)
   printf "%s.r%s.g%s" "$base" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
 }
 
@@ -63,7 +63,7 @@ build() {
   export CARGO_TARGET_DIR="$HOME/.cache/hakai-git-build-target"
   export RUSTUP_TOOLCHAIN=stable
 
-  cargo build --release --manifest-path hakai/Cargo.toml --locked
+  cargo build --release --manifest-path hakai-linux/Cargo.toml --locked
 
   # This project's own explicit non-goal is bundled bitmap assets — every icon it ships is
   # generated procedurally at build time instead, via the existing

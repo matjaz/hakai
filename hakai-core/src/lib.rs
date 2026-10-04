@@ -20,6 +20,8 @@ mod geometry;
 pub mod hud;
 pub mod icons;
 pub mod particles;
+#[cfg(feature = "playback")]
+pub mod playback;
 #[cfg(feature = "render")]
 pub mod render;
 pub mod rng;

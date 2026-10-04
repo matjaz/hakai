@@ -1,12 +1,13 @@
 [package]
-name = "hakai"
+name = "hakai-linux"
 version = "1.1.0"
 edition = "2021"
-description = "Smash, burn and repaint your desktop — a native Wayland/Hyprland desktop-destruction toy for Omarchy."
+description = "Smash, burn and repaint your desktop — the Linux build of hakai (Wayland layer-shell overlay, GNOME/X11 fallback)."
 license = "MIT"
 repository = "https://github.com/matjaz/hakai"
 readme = "../README.md"
 
+# The command stays `hakai` — it's what keybinds, .desktop files and packages run.
 [[bin]]
 name = "hakai"
 path = "src/main.rs"
@@ -28,8 +29,8 @@ strip = true
 # already-working, separately-tested setups: no Cargo.lock merge, no target-dir path
 # changes on either side.
 # `shell` (which implies `render`): the renderer and scene for the native layer-shell path,
-# plus the winit shell `fallback.rs` runs on GNOME and X11.
-hakai-core = { path = "../hakai-core", features = ["shell"] }
+# plus the winit shell `fallback.rs` runs on GNOME and X11. `playback`: cpal audio.
+hakai-core = { path = "../hakai-core", features = ["shell", "playback"] }
 # hakai-core's own dependency, pinned to match — needed here too since main.rs names
 # `tiny_skia::Pixmap` directly (icon upload), and Rust won't let a crate reference a
 # transitive dependency's types without also depending on it.
@@ -68,15 +69,9 @@ log = "0.4"
 # HUD text shaping (`cosmic-text`) now lives in `hakai_core::render::text`, pulled in by
 # the `render` feature on the hakai-core dependency above — no direct dep here any more.
 
-# Phase 5: real audio. `cpal` is a long-established, stable-API crate (unlike
-# `cosmic-text`) — higher confidence here than anywhere else new in this port, though
-# still genuinely new ground: everything else that's touched an OS-level API so far
-# (`wgpu`, `smithay-client-toolkit`, `wayland-backend`) has been GPU/compositor-side;
-# `cpal` talks to a completely different subsystem (ALSA/PipeWire), on its own dedicated
-# realtime audio-callback thread. `hound` decodes the bundled WAVs (all confirmed mono,
-# 16-bit PCM, 44.1kHz — `file assets/sounds/*.wav`) into the `f32` samples `cpal` wants.
-cpal = "0.18"
-hound = "3"
+# Phase 5: real audio — now `hakai_core::playback` (the `playback` feature above), shared
+# with the Windows and macOS builds; cpal talks to ALSA/PipeWire on its own realtime
+# callback thread.
 
 # Phase 6: screen capture, for the brightness-driven impact sound
 # (`hakai_core::audio::smash_name`, already ported, unused until now — it falls back to a

@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleExecutable</key>
-	<string>hakai-mac</string>
+	<string>hakai</string>
 	<key>CFBundleIdentifier</key>
 	<string>si.intera.hakai</string>
 	<key>CFBundleInfoDictionaryVersion</key>

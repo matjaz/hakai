@@ -67,7 +67,6 @@ use hakai_core::sprites::SpriteFactory;
 use hakai_core::tools::ToolId;
 use hakai_core::{capture, DecalFactory};
 
-mod audio;
 mod fallback;
 mod theme;
 
@@ -171,16 +170,7 @@ fn main() {
     // the same genuine no-op it's always been, so a missing/failed audio device costs
     // nothing but sound. Held on `State` only until the first output's surface exists and
     // the `Scene` is built, which takes ownership of it.
-    let audio_sink = match audio::CpalBackend::new() {
-        Some(backend) => {
-            log::info!("audio: cpal backend started");
-            AudioSink::with_backend(Box::new(backend))
-        }
-        None => {
-            log::warn!("audio: no backend available — running without sound");
-            AudioSink::new()
-        }
-    };
+    let audio_sink = hakai_core::playback::sink();
 
     // Phase 7: the active Omarchy theme's paint palette + HUD chrome colours — read once,
     // here, and stashed until `Scene` is built (both feed into it). All-or-nothing: a

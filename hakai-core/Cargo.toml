@@ -18,6 +18,9 @@ path = "src/lib.rs"
 # binaries (`hakai`, `hakai-win`, `hakai-mac`) turn it on; each still owns its own window,
 # event loop and screen-capture backend.
 render = ["dep:wgpu", "dep:bytemuck", "dep:cosmic-text", "dep:raw-window-handle", "dep:log"]
+# Real audio playback (`hakai_core::playback`): cpal + the 35 bundled WAVs. Every binary
+# turns it on; kept out of the default build so the headless tests stay audio-free.
+playback = ["dep:cpal", "dep:hound", "dep:log"]
 # The shared winit shell (`hakai_core::shell`) — windows, event loop, input — on top of the
 # renderer. hakai-win, hakai-mac and the Linux binary's GNOME/X11 fallback turn it on.
 shell = ["render", "dep:winit", "dep:pollster"]
@@ -47,6 +50,12 @@ bytemuck = { version = "1", features = ["derive"], optional = true }
 # src/render/text.rs for the version RISK notes carried over from the port.
 cosmic-text = { version = "0.12", optional = true }
 log = { version = "0.4", optional = true }
+
+# --- `playback` feature only ------------------------------------------------------------
+# cpal talks to ALSA/PipeWire, WASAPI or CoreAudio on its own realtime callback thread;
+# hound decodes the bundled WAVs (mono, 16-bit PCM, 44.1kHz) into the f32 samples it wants.
+cpal = { version = "0.18", optional = true }
+hound = { version = "3", optional = true }
 
 # --- `shell` feature only ----------------------------------------------------------------
 winit = { version = "0.30", optional = true }

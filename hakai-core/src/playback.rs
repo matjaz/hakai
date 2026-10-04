@@ -1,4 +1,8 @@
-//! Real audio playback — `cpal` behind `hakai_core::audio::AudioBackend`.
+//! Real audio playback — `cpal` behind [`crate::audio::AudioBackend`].
+//!
+//! Shared by all three binaries (behind the crate's `playback` feature) — it started out
+//! in the Linux binary and the Windows and macOS builds `#[path]`-included it from there.
+//! [`sink`] is the usual entry point: the backend if one starts, silence otherwise.
 //!
 //! Ported from `AudioEngine.swift`: a 24-voice round-robin pool for one-shot sounds
 //! (`smash1`, a machine-gun shot, ...), keyed loop voices with a ~100ms gain glide (the
@@ -28,7 +32,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use hakai_core::audio::AudioBackend;
+use crate::audio::{AudioBackend, AudioSink};
 
 const VOICE_COUNT: usize = 24;
 /// `AudioEngine.swift`'s `update(dt:)`: `let step = Float(min(1, dt / 0.10))` — ~100ms to
@@ -291,6 +295,21 @@ fn mix_frame(out: &mut [f32], frame: usize, channels: usize, left: f32, right: f
 /// The real `AudioBackend` — owns the `cpal` stream (kept alive for as long as this does;
 /// the stream stops as soon as it's dropped) and the shared `Mixer` the stream's own
 /// callback reads from.
+/// An [`AudioSink`] driving the default output device — or a silent one when there's no
+/// usable device (audio is optional: the app carries on without it).
+pub fn sink() -> AudioSink {
+    match CpalBackend::new() {
+        Some(backend) => {
+            log::info!("audio: cpal backend started");
+            AudioSink::with_backend(Box::new(backend))
+        }
+        None => {
+            log::warn!("audio: no backend — running silent");
+            AudioSink::new()
+        }
+    }
+}
+
 pub struct CpalBackend {
     sounds: HashMap<&'static str, Arc<[f32]>>,
     mixer: Arc<Mutex<Mixer>>,

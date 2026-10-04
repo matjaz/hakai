@@ -2,8 +2,8 @@
 #
 #   powershell -File hakai-win/package.ps1      (Windows PowerShell 5.1 is fine)
 #
-# Output: hakai-win/target/hakai-win-<version>-x86_64-windows.zip — the stripped release
-# binary plus LICENSE and CREDITS.md. hakai-win.exe is fully self-contained (fonts and
+# Output: hakai-win/target/hakai-<version>-windows-x86_64.zip — the stripped release
+# binary plus LICENSE and CREDITS.md. hakai.exe is fully self-contained (fonts and
 # all 35 sounds are compiled in), so there is nothing else to bundle.
 
 $ErrorActionPreference = 'Stop'
@@ -15,7 +15,7 @@ try {
     $ver = [regex]::Match((Get-Content hakai-win/Cargo.toml -Raw), '(?m)^version\s*=\s*"([^"]+)"').Groups[1].Value
     if (-not $ver) { throw "couldn't read version from hakai-win/Cargo.toml" }
 
-    $name  = "hakai-win-$ver-x86_64-windows"
+    $name  = "hakai-$ver-windows-x86_64"
     $stage = Join-Path $repo "hakai-win/target/$name"
     $zip   = Join-Path $repo "hakai-win/target/$name.zip"
 
@@ -23,7 +23,7 @@ try {
     Remove-Item -Force $zip -ErrorAction SilentlyContinue
     New-Item -ItemType Directory -Force $stage | Out-Null
 
-    Copy-Item hakai-win/target/release/hakai-win.exe $stage/
+    Copy-Item hakai-win/target/release/hakai.exe $stage/
     Copy-Item hakai-win/README.txt                   (Join-Path $stage 'README.txt')
     Copy-Item LICENSE                                (Join-Path $stage 'LICENSE.txt')
     Copy-Item CREDITS.md                             $stage/

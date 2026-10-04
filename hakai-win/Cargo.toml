@@ -7,8 +7,9 @@ license = "MIT"
 repository = "https://github.com/matjaz/hakai"
 readme = "../README.md"
 
+# The exe is `hakai.exe` — what the user sees; `hakai-win` is just the crate.
 [[bin]]
-name = "hakai-win"
+name = "hakai"
 path = "src/main.rs"
 
 [profile.release]
@@ -21,7 +22,7 @@ strip = true
 # The renderer, scene and winit shell (windows, event loop, input) live in hakai-core
 # behind its `shell` feature, shared with the macOS build — this crate is down to the
 # Windows hooks: DirectComposition, DXGI capture, the global Esc hotkey.
-hakai-core = { path = "../hakai-core", features = ["shell"] }
+hakai-core = { path = "../hakai-core", features = ["shell", "playback"] }
 
 # wgpu 30: Phase 0 found wgpu 22's D3D12 backend only offers CompositeAlphaMode::Opaque on
 # a plain HWND; wgpu 27+ added Dx12SwapchainKind::DxgiFromVisual (a DirectComposition
@@ -36,10 +37,7 @@ log = "0.4"
 # HUD text shaping (`cosmic-text`) now comes from `hakai_core::render::text` via the
 # `render` feature above — no direct dep here any more.
 
-# Real audio — same as the Linux binary's audio.rs (also #[path]-included verbatim).
-# cpal picks the WASAPI host on Windows; hound decodes the bundled WAVs.
-cpal = "0.18"
-hound = "3"
+# Audio comes from hakai-core's `playback` feature (cpal picks the WASAPI host here).
 
 # Win32 escape hatches + (Phase 4) DXGI Desktop Duplication for screen capture. Matches
 # the copy wgpu-hal 30 pulls in, so there's one unified `windows` in the tree.
