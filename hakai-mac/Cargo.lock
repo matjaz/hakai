@@ -837,7 +837,7 @@ dependencies = [
 
 [[package]]
 name = "hakai-core"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "bytemuck",
  "cosmic-text",
@@ -854,7 +854,7 @@ dependencies = [
 
 [[package]]
 name = "hakai-mac"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "cpal",
  "env_logger",
