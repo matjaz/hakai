@@ -91,10 +91,13 @@ fn main() {
     let base_filter = std::env::var("RUST_LOG").unwrap_or_else(|_| "warn".to_string());
     env_logger::Builder::new().parse_filters(&format!("{base_filter},wgpu_core=warn,wgpu_hal=warn,naga=warn")).init();
 
-    let conn = Connection::connect_to_env().expect(
-        "could not connect to a Wayland compositor — this has to run inside a live \
-         Hyprland session, not a TTY",
-    );
+    let conn = Connection::connect_to_env().unwrap_or_else(|e| {
+        eprintln!(
+            "hakai: couldn't connect to a Wayland compositor ({e}).\n\
+             It has to run inside a Wayland session (Hyprland, Sway, KDE Plasma, …) — not X11 or a TTY."
+        );
+        std::process::exit(1);
+    });
 
     let (globals, mut event_queue) =
         registry_queue_init(&conn).expect("failed to initialize the wl_registry");
@@ -102,8 +105,15 @@ fn main() {
 
     let compositor_state =
         CompositorState::bind(&globals, &qh).expect("wl_compositor is not advertised");
-    let layer_shell =
-        LayerShell::bind(&globals, &qh).expect("zwlr_layer_shell_v1 is not advertised — is this really wlroots/Hyprland?");
+    // The one hard requirement. Now that .deb/.rpm put hakai in front of GNOME users too,
+    // say so plainly instead of panicking.
+    let layer_shell = LayerShell::bind(&globals, &qh).unwrap_or_else(|_| {
+        eprintln!(
+            "hakai: this compositor doesn't support wlr-layer-shell, which hakai needs for its overlay.\n\
+             It works on Hyprland, Sway, KDE Plasma, river, labwc, Wayfire, niri and COSMIC — not on GNOME."
+        );
+        std::process::exit(1);
+    });
     let output_state = OutputState::new(&globals, &qh);
     let seat_state = SeatState::new(&globals, &qh);
 

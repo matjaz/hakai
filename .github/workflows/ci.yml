@@ -44,14 +44,17 @@ jobs:
   # not guessed at blind.
   #
   # Both architectures: x86_64 and aarch64 (Omarchy on ARM), each on a native runner.
+  # Deliberately on Ubuntu 22.04, not -latest: glibc is backwards-compatible, so the oldest
+  # build base sets the floor for every distro the one binary (and its .deb/.rpm) runs on —
+  # glibc 2.35 covers Ubuntu 22.04+, Debian 12+, Fedora 36+.
   hakai-build:
     name: hakai (Linux ${{ matrix.arch }} — build + package, no compositor in CI)
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
         include:
-          - { arch: x86_64, runner: ubuntu-latest }
-          - { arch: aarch64, runner: ubuntu-24.04-arm }
+          - { arch: x86_64, runner: ubuntu-22.04, nfpm: x86_64 }
+          - { arch: aarch64, runner: ubuntu-22.04-arm, nfpm: arm64 }
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -65,13 +68,24 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwayland-dev libxkbcommon-dev libasound2-dev libvulkan-dev pkg-config
 
-      - name: Build + package (hakai/package.sh)
+      - name: Install nfpm (wraps the built binary as .deb/.rpm)
+        env:
+          NFPM_VERSION: 2.47.0
+        run: |
+          curl -sSfL "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${NFPM_VERSION}_Linux_${{ matrix.nfpm }}.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin nfpm
+          nfpm --version
+
+      - name: Build + package (hakai/package.sh → tarball, .deb, .rpm)
         run: hakai/package.sh
 
       - uses: actions/upload-artifact@v4
         with:
           name: hakai-linux-${{ matrix.arch }}
-          path: hakai/target/hakai-*-linux.tar.gz
+          path: |
+            hakai/target/hakai-*-linux.tar.gz
+            hakai/target/hakai_*.deb
+            hakai/target/hakai-*.rpm
           if-no-files-found: error
           retention-days: 14
 

@@ -14,7 +14,7 @@ Hyprland, a DirectComposition overlay on Windows, and a Metal overlay on macOS. 
 
 | Platform | Get it | Notes |
 |---|---|---|
-| Linux (Hyprland) | [Releases](https://github.com/matjaz/hakai/releases) tarball (x86_64, aarch64), or `makepkg` | Needs a Hyprland session; Omarchy theme colours |
+| Linux (Wayland) | [Releases](https://github.com/matjaz/hakai/releases) `.deb`, `.rpm` or tarball (x86_64, aarch64), or `makepkg` | Needs a `wlr-layer-shell` compositor (Hyprland, Sway, KDE Plasma, …); Omarchy theme colours |
 | Windows 10/11 | [Releases](https://github.com/matjaz/hakai/releases) `.zip` (x86_64) | Portable, unsigned — SmartScreen shows once |
 | macOS 11+ | [Releases](https://github.com/matjaz/hakai/releases) `.dmg` (universal) | Not notarised — *Open Anyway* once |
 
@@ -54,16 +54,29 @@ variant where it can't.
 
 ### Linux
 
-Needs a real Hyprland session (Wayland, `wlr-layer-shell`) — this won't run on X11,
-GNOME, or KDE, and there's no plan to support them (see the non-goals in the project's
-own port-planning notes).
+Needs a Wayland compositor with `wlr-layer-shell`: Hyprland (the one it's built and tested
+on), Sway, river, labwc, Wayfire, niri, KDE Plasma 6 and COSMIC all have it. GNOME and X11
+sessions don't, so it won't start there — the default Ubuntu and Fedora Workstation
+desktops included. The brightness-driven impact sound needs `wlr-screencopy` on top
+(wlroots compositors, Hyprland, niri); elsewhere it falls back to a random variant.
 
-The release tarball (`hakai-<version>-<arch>-linux.tar.gz`) holds the binary, a
-`.desktop` entry and its icon — e.g. `install -Dm755 hakai ~/.local/bin/hakai`, plus
-`hakai.desktop` → `~/.local/share/applications/` and `hakai.png` →
-`~/.local/share/icons/hicolor/256x256/apps/` for a launcher entry.
+One binary per architecture serves every distro — it's built on Ubuntu 22.04, so it needs
+glibc 2.35+ (Ubuntu 22.04+, Debian 12+, Fedora 36+). From the
+[releases page](https://github.com/matjaz/hakai/releases):
 
-For a tracked package, it's not yet on the AUR (registration is currently locked down repo-wide after a wave of
+```bash
+sudo apt install ./hakai_<version>-1_amd64.deb        # Debian, Ubuntu, Mint, …
+sudo dnf install ./hakai-<version>-1.x86_64.rpm       # Fedora, openSUSE (zypper), …
+```
+
+(`arm64`/`aarch64` for ARM.) Or the tarball, `hakai-<version>-<arch>-linux.tar.gz` —
+the binary, a `.desktop` entry and its icon: `install -Dm755 hakai ~/.local/bin/hakai`,
+plus `hakai.desktop` → `~/.local/share/applications/` and `hakai.png` →
+`~/.local/share/icons/hicolor/256x256/apps/` for a launcher entry. Either way it needs
+`libxkbcommon`, ALSA's `libasound`, `libwayland-client` and a Vulkan driver at runtime —
+the packages pull them in.
+
+On Arch / Omarchy, it's not yet on the AUR (registration is currently locked down repo-wide after a wave of
 malicious package uploads in mid-2026 — nothing to do with this package specifically;
 submission will follow once that reopens). Until then, install directly with `makepkg`,
 using the `PKGBUILD` already in this repo — confirmed working end to end on real
@@ -177,8 +190,9 @@ hakai-mac/package.sh                                        # build the universa
 
 ## Releases
 
-CI builds and packages every platform on each push — Linux tarballs (x86_64, aarch64),
-the Windows zip and the universal macOS DMG — and keeps them as workflow artifacts for two
+CI builds and packages every platform on each push — Linux `.deb`, `.rpm` and tarball
+(x86_64, aarch64; one build each, wrapped three ways by
+[nfpm](https://nfpm.goreleaser.com)), the Windows zip and the universal macOS DMG — and keeps them as workflow artifacts for two
 weeks. Pushing a `v*` tag additionally publishes those same artifacts (plus `SHA256SUMS`)
 as a GitHub release, without rebuilding anything. The tag has to match the crates'
 `version` (`v1.0.0` ↔ `1.0.0` in `hakai`, `hakai-win` and `hakai-mac`), or the release
