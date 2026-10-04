@@ -68,6 +68,7 @@ use hakai_core::tools::ToolId;
 use hakai_core::{capture, DecalFactory};
 
 mod audio;
+mod fallback;
 mod theme;
 
 fn main() {
@@ -91,13 +92,21 @@ fn main() {
     let base_filter = std::env::var("RUST_LOG").unwrap_or_else(|_| "warn".to_string());
     env_logger::Builder::new().parse_filters(&format!("{base_filter},wgpu_core=warn,wgpu_hal=warn,naga=warn")).init();
 
-    let conn = Connection::connect_to_env().unwrap_or_else(|e| {
-        eprintln!(
-            "hakai: couldn't connect to a Wayland compositor ({e}).\n\
-             It has to run inside a Wayland session (Hyprland, Sway, KDE Plasma, …) — not X11 or a TTY."
-        );
-        std::process::exit(1);
-    });
+    // Two ways onto the screen. The native one is a wlr-layer-shell overlay (Hyprland,
+    // Sway, KDE Plasma, …) — below. Without that protocol (GNOME) or without Wayland at
+    // all (an X11 session), `fallback` runs the winit shell the Windows and macOS builds
+    // use: ordinary fullscreen transparent windows. `HAKAI_BACKEND=winit` forces it.
+    if std::env::var("HAKAI_BACKEND").is_ok_and(|b| b == "winit") {
+        fallback::run("HAKAI_BACKEND=winit", std::env::var_os("WAYLAND_DISPLAY").is_none());
+        return;
+    }
+    let conn = match Connection::connect_to_env() {
+        Ok(conn) => conn,
+        Err(e) => {
+            fallback::run(&format!("no Wayland compositor ({e})"), true);
+            return;
+        }
+    };
 
     let (globals, mut event_queue) =
         registry_queue_init(&conn).expect("failed to initialize the wl_registry");
@@ -105,15 +114,15 @@ fn main() {
 
     let compositor_state =
         CompositorState::bind(&globals, &qh).expect("wl_compositor is not advertised");
-    // The one hard requirement. Now that .deb/.rpm put hakai in front of GNOME users too,
-    // say so plainly instead of panicking.
-    let layer_shell = LayerShell::bind(&globals, &qh).unwrap_or_else(|_| {
-        eprintln!(
-            "hakai: this compositor doesn't support wlr-layer-shell, which hakai needs for its overlay.\n\
-             It works on Hyprland, Sway, KDE Plasma, river, labwc, Wayfire, niri and COSMIC — not on GNOME."
-        );
-        std::process::exit(1);
-    });
+    let layer_shell = match LayerShell::bind(&globals, &qh) {
+        Ok(layer_shell) => layer_shell,
+        Err(_) => {
+            // Let go of this connection first; winit opens its own.
+            drop((compositor_state, event_queue, globals, conn));
+            fallback::run("the compositor has no wlr-layer-shell", false);
+            return;
+        }
+    };
     let output_state = OutputState::new(&globals, &qh);
     let seat_state = SeatState::new(&globals, &qh);
 

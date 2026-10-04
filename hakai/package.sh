@@ -19,8 +19,8 @@
 #
 # One binary serves every distro: glibc is backwards-compatible, so building on an old
 # base (CI uses Ubuntu 22.04, glibc 2.35) is what sets the floor. The binary links only
-# libxkbcommon and libasound directly; libwayland-client and the Vulkan loader are
-# dlopen'd at runtime.
+# libxkbcommon and libasound directly; libwayland-client, the Vulkan loader and (for the
+# GNOME/X11 fallback) the X11 libraries and EGL are dlopen'd at runtime.
 #
 # Run from anywhere; cargo is invoked from the repo root, so hakai/.cargo/config.toml's
 # dev-machine target-dir override doesn't apply — output lands in hakai/target, or in
@@ -76,8 +76,9 @@ description: |-
   Smash, burn and repaint your live desktop.
   A transparent overlay with nine tools (hammer, chain-saw, machine gun,
   flame-thrower, paint, phaser, stamps, termites, washer) over your real
-  desktop. Needs a Wayland compositor with wlr-layer-shell: Hyprland, Sway,
-  KDE Plasma, river, labwc, Wayfire, niri, COSMIC.
+  desktop. Runs on any Wayland or X11 desktop: a native layer-shell overlay on
+  Hyprland, Sway, KDE Plasma, river, labwc, Wayfire, niri and COSMIC, and
+  fullscreen transparent windows on GNOME and X11.
 contents:
   - src: $STAGE/hakai
     dst: /usr/bin/hakai
@@ -104,6 +105,9 @@ overrides:
       - libvulkan1
     recommends:
       - mesa-vulkan-drivers
+      # The GNOME/X11 fallback: EGL for wgpu's GL backend on X11, xkbcommon's X11 glue.
+      - libegl1
+      - libxkbcommon-x11-0
   rpm:
     depends:
       - libxkbcommon
@@ -112,6 +116,8 @@ overrides:
       - vulkan-loader
     recommends:
       - mesa-vulkan-drivers
+      - libglvnd-egl
+      - libxkbcommon-x11
 YAML
     for fmt in deb rpm; do
         nfpm package --config "$STAGE/nfpm.yaml" --packager "$fmt" --target "$TARGET_DIR/" >/dev/null

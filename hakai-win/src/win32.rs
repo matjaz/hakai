@@ -1,7 +1,7 @@
 //! Small Win32 tweaks to the winit windows that have no winit API.
 
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-use winit::window::Window;
+use hakai_core::shell::winit::window::Window;
 use windows::core::BOOL;
 use windows::Win32::Foundation::{CloseHandle, COLORREF, HWND, LPARAM};
 use windows::Win32::System::Console::GetConsoleWindow;

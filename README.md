@@ -8,13 +8,14 @@ washer).
 Hakai is Japanese for *destruction*. It's a Rust/`wgpu` reimplementation of
 [Desktop Destroyer](http://www.breatharian.eu/Petr/en/program/misc.htm) by Miroslav
 Němeček — written independently, not a code fork. One shared core (every tool, the
-renderer, the scene) runs under three thin native shells: a `wlr-layer-shell` overlay on
-Hyprland, a DirectComposition overlay on Windows, and a Metal overlay on macOS. See
+renderer, the scene, a winit window shell) runs under thin native front ends: a
+`wlr-layer-shell` overlay on Hyprland and friends, fullscreen windows on GNOME and X11, a
+DirectComposition overlay on Windows, and a Metal overlay on macOS. See
 [`CREDITS.md`](CREDITS.md) for the full sound/font attribution.
 
 | Platform | Get it | Notes |
 |---|---|---|
-| Linux (Wayland) | [Releases](https://github.com/matjaz/hakai/releases) `.deb`, `.rpm` or tarball (x86_64, aarch64), or `makepkg` | Needs a `wlr-layer-shell` compositor (Hyprland, Sway, KDE Plasma, …); Omarchy theme colours |
+| Linux | [Releases](https://github.com/matjaz/hakai/releases) `.deb`, `.rpm` or tarball (x86_64, aarch64), or `makepkg` | Any Wayland or X11 desktop; native overlay on Hyprland, Sway, KDE Plasma, …; Omarchy theme colours |
 | Windows 10/11 | [Releases](https://github.com/matjaz/hakai/releases) `.zip` (x86_64) | Portable, unsigned — SmartScreen shows once |
 | macOS 11+ | [Releases](https://github.com/matjaz/hakai/releases) `.dmg` (universal) | Not notarised — *Open Anyway* once |
 
@@ -54,11 +55,21 @@ variant where it can't.
 
 ### Linux
 
-Needs a Wayland compositor with `wlr-layer-shell`: Hyprland (the one it's built and tested
-on), Sway, river, labwc, Wayfire, niri, KDE Plasma 6 and COSMIC all have it. GNOME and X11
-sessions don't, so it won't start there — the default Ubuntu and Fedora Workstation
-desktops included. The brightness-driven impact sound needs `wlr-screencopy` on top
-(wlroots compositors, Hyprland, niri); elsewhere it falls back to a random variant.
+Runs on any Wayland or X11 desktop, two ways:
+
+- **Native overlay** — a `wlr-layer-shell` surface with an exclusive keyboard grab, on
+  Hyprland (the one it's built and tested on), Sway, river, labwc, Wayfire, niri, KDE
+  Plasma 6 and COSMIC. The brightness-driven impact sound reads the screen with
+  `wlr-screencopy` where there is one (wlroots compositors, Hyprland, niri).
+- **Fallback** — on GNOME (no layer-shell) and in X11 sessions, hakai opens ordinary
+  fullscreen transparent windows instead, one per monitor — the same winit shell the
+  Windows and macOS builds use. Alt+Tab and the Super key still reach the desktop, the
+  impact sound picks a random variant, and on X11 transparency needs a compositing window
+  manager (every mainstream desktop has one; bare i3 without picom shows black).
+
+It picks automatically; `HAKAI_BACKEND=winit` forces the fallback, and `WGPU_BACKEND=gl`
+or `vulkan` pins the graphics backend if a driver misbehaves (the fallback uses Vulkan on
+Wayland and GL on X11 by default).
 
 One binary per architecture serves every distro — it's built on Ubuntu 22.04, so it needs
 glibc 2.35+ (Ubuntu 22.04+, Debian 12+, Fedora 36+). From the
@@ -73,8 +84,8 @@ sudo dnf install ./hakai-<version>-1.x86_64.rpm       # Fedora, openSUSE (zypper
 the binary, a `.desktop` entry and its icon: `install -Dm755 hakai ~/.local/bin/hakai`,
 plus `hakai.desktop` → `~/.local/share/applications/` and `hakai.png` →
 `~/.local/share/icons/hicolor/256x256/apps/` for a launcher entry. Either way it needs
-`libxkbcommon`, ALSA's `libasound`, `libwayland-client` and a Vulkan driver at runtime —
-the packages pull them in.
+`libxkbcommon`, ALSA's `libasound`, `libwayland-client` and a Vulkan driver at runtime (plus
+EGL for the X11 fallback) — the packages pull them in.
 
 On Arch / Omarchy, it's not yet on the AUR (registration is currently locked down repo-wide after a wave of
 malicious package uploads in mid-2026 — nothing to do with this package specifically;
@@ -161,17 +172,20 @@ All three binaries build against `wgpu` 30 (the Windows side forced the bump —
 backend can't present a per-pixel-alpha surface to a plain window, and the
 `DirectComposition` path that can only landed later; Linux and macOS followed). The
 renderer and the whole per-output scene live in `hakai_core::render`, behind the crate's
-off-by-default `render` feature; each binary is just its window, its event loop and its
-screen-capture backend (`zwlr_screencopy_v1` on Wayland, DXGI Desktop Duplication on
-Windows, `CGWindowListCreateImage` on macOS).
+off-by-default `render` feature, and the winit shell (windows per monitor, event loop,
+keyboard/pointer routing) in `hakai_core::shell` behind `shell`. Windows and macOS are just
+a `Platform` impl on that shell — their backend, native window styling and screen-capture
+backend (DXGI Desktop Duplication, `CGWindowListCreateImage`); the Linux binary keeps its
+own Wayland event loop for the layer-shell overlay (`zwlr_screencopy_v1` capture) and uses
+the shell for its GNOME/X11 fallback.
 
 See `WINDOWS-PORT.md` (analysis) and `WINDOWS-PLAN.md` (the phased build log) for the full
 story.
 
 ## macOS
 
-`hakai-mac/` is the macOS build — a third binary crate on `hakai-core`'s shared renderer
-and scene, with a winit event loop like `hakai-win`. Metal draws into a non-opaque
+`hakai-mac/` is the macOS build — a third binary crate on `hakai-core`'s shared renderer,
+scene and winit shell, like `hakai-win`. Metal draws into a non-opaque
 `CAMetalLayer`; the overlay is lifted to the screensaver window level so it
 covers the menu bar and the Dock too, on every Space and every display (the recipe from
 the Swift original's `OverlayWindow`). The brightness-driven impact sound reads the screen
@@ -206,7 +220,8 @@ git tag v1.0.0 && git push origin v1.0.0
 
 ```
 hakai/         the Linux binary — wlr-layer-shell surfaces, Wayland input, cpal audio,
-               wlr-screencopy capture, Omarchy theme integration; package.sh → tarball
+               wlr-screencopy capture, Omarchy theme integration, and the winit fallback
+               for GNOME/X11; package.sh → tarball, .deb, .rpm
 hakai-win/     the Windows binary — a DirectComposition overlay, winit, DXGI Desktop
                Duplication; package.ps1 → portable zip
 hakai-mac/     the macOS binary — a screensaver-level Metal overlay, winit, CoreGraphics
@@ -214,7 +229,9 @@ hakai-mac/     the macOS binary — a screensaver-level Metal overlay, winit, Co
 hakai-core/    the shared library — headless by default (tiled damage layer, procedural
                decal/icon/sprite generators, all nine tools, termite colony, particles,
                HUD/credits logic); its `render` feature adds the wgpu renderer, HUD text
-               and the per-output scene all three binaries draw with
+               and the per-output scene all three binaries draw with, and `shell` the
+               winit window/event-loop/input shell behind Windows, macOS and the Linux
+               fallback
 packaging/     PKGBUILD (AUR, -git), .desktop entry, Hyprland keybind snippet
 ```
 
@@ -247,6 +264,10 @@ normal display. See `WINDOWS-PLAN.md` for what's confirmed and what isn't.
 The macOS build is functional — overlay above the menu bar and Dock, all nine tools,
 audio, a universal DMG — verified on Apple silicon (M3 Pro). Intel and multi-monitor
 setups are built but not yet tried on real hardware.
+
+The Linux GNOME/X11 fallback is tested in headless sessions (Weston without layer-shell,
+Xvfb + openbox; Mesa's software renderer) — window, fullscreen, tools, HUD and input all
+work there. It hasn't yet been run on a real GNOME or X11 desktop with a GPU.
 
 ## License
 

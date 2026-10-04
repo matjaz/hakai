@@ -842,12 +842,14 @@ dependencies = [
  "bytemuck",
  "cosmic-text",
  "log",
+ "pollster",
  "raw-window-handle",
  "serde",
  "serde_json",
  "tiny-skia",
  "ttf-parser 0.24.1",
  "wgpu",
+ "winit",
 ]
 
 [[package]]
@@ -859,11 +861,9 @@ dependencies = [
  "hakai-core",
  "hound",
  "log",
- "pollster",
  "raw-window-handle",
  "wgpu",
  "windows",
- "winit",
 ]
 
 [[package]]

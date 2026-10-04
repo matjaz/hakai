@@ -23,6 +23,8 @@ pub mod particles;
 #[cfg(feature = "render")]
 pub mod render;
 pub mod rng;
+#[cfg(feature = "shell")]
+pub mod shell;
 pub mod simulation;
 pub mod sprites;
 pub mod tools;

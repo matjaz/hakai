@@ -132,10 +132,16 @@ impl Scene {
         // DX12 (DirectComposition) offers PreMultiplied; Metal only PostMultiplied, which
         // is just a non-opaque CAMetalLayer — CoreAnimation composites it as premultiplied,
         // which is what ALPHA_BLENDING onto a cleared-transparent target already produces.
-        let alpha_mode = [wgpu::CompositeAlphaMode::PreMultiplied, wgpu::CompositeAlphaMode::PostMultiplied]
-            .into_iter()
-            .find(|m| caps.alpha_modes.contains(m))
-            .unwrap_or(caps.alpha_modes[0]);
+        // Vulkan on X11 may only offer Inherit: the window's ARGB visual decides, and X11
+        // compositors treat that as premultiplied too.
+        let alpha_mode = [
+            wgpu::CompositeAlphaMode::PreMultiplied,
+            wgpu::CompositeAlphaMode::PostMultiplied,
+            wgpu::CompositeAlphaMode::Inherit,
+        ]
+        .into_iter()
+        .find(|m| caps.alpha_modes.contains(m))
+        .unwrap_or(caps.alpha_modes[0]);
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format,

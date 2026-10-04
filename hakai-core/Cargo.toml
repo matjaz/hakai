@@ -18,6 +18,9 @@ path = "src/lib.rs"
 # binaries (`hakai`, `hakai-win`, `hakai-mac`) turn it on; each still owns its own window,
 # event loop and screen-capture backend.
 render = ["dep:wgpu", "dep:bytemuck", "dep:cosmic-text", "dep:raw-window-handle", "dep:log"]
+# The shared winit shell (`hakai_core::shell`) — windows, event loop, input — on top of the
+# renderer. hakai-win, hakai-mac and the Linux binary's GNOME/X11 fallback turn it on.
+shell = ["render", "dep:winit", "dep:pollster"]
 
 [dependencies]
 # If cargo can't resolve this (a breaking 0.12+ is out and old 0.11.x got yanked, which
@@ -44,3 +47,7 @@ bytemuck = { version = "1", features = ["derive"], optional = true }
 # src/render/text.rs for the version RISK notes carried over from the port.
 cosmic-text = { version = "0.12", optional = true }
 log = { version = "0.4", optional = true }
+
+# --- `shell` feature only ----------------------------------------------------------------
+winit = { version = "0.30", optional = true }
+pollster = { version = "0.3", optional = true }

@@ -11,9 +11,9 @@ use objc2::runtime::AnyObject;
 use objc2::{class, msg_send};
 use objc2_foundation::NSRect;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-use winit::monitor::MonitorHandle;
-use winit::platform::macos::MonitorHandleExtMacOS;
-use winit::window::Window;
+use hakai_core::shell::winit::monitor::MonitorHandle;
+use hakai_core::shell::winit::platform::macos::MonitorHandleExtMacOS;
+use hakai_core::shell::winit::window::Window;
 
 // ── CoreGraphics FFI ─────────────────────────────────────────────────────────────────────
 

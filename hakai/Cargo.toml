@@ -27,7 +27,9 @@ strip = true
 # functional outcome (this crate can `use hakai_core::...`) with far less risk to two
 # already-working, separately-tested setups: no Cargo.lock merge, no target-dir path
 # changes on either side.
-hakai-core = { path = "../hakai-core", features = ["render"] }
+# `shell` (which implies `render`): the renderer and scene for the native layer-shell path,
+# plus the winit shell `fallback.rs` runs on GNOME and X11.
+hakai-core = { path = "../hakai-core", features = ["shell"] }
 # hakai-core's own dependency, pinned to match — needed here too since main.rs names
 # `tiny_skia::Pixmap` directly (icon upload), and Rust won't let a crate reference a
 # transitive dependency's types without also depending on it.

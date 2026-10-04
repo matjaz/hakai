@@ -104,7 +104,7 @@ impl DesktopDuplication {
     /// Grabs the most recent desktop frame and hands its mapped BGRA pixels to `f` as
     /// `(bytes, width, height, stride)`. `None` when there's no new frame yet
     /// (`WAIT_TIMEOUT`, the common case at this cadence), or on any recoverable error.
-    pub fn capture<R>(&mut self, f: impl FnOnce(&[u8], u32, u32, u32) -> R) -> Option<R> {
+    pub fn grab<R>(&mut self, f: impl FnOnce(&[u8], u32, u32, u32) -> R) -> Option<R> {
         unsafe {
             // Defensive: a previous call that returned early mid-frame.
             if self.holding {
@@ -172,6 +172,12 @@ impl DesktopDuplication {
             self.holding = false;
             result
         }
+    }
+}
+
+impl hakai_core::shell::DesktopCapture for DesktopDuplication {
+    fn capture(&mut self, f: &mut dyn FnMut(&[u8], u32, u32, u32)) -> bool {
+        self.grab(|bytes, w, h, stride| f(bytes, w, h, stride)).is_some()
     }
 }
 

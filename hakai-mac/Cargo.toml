@@ -15,22 +15,18 @@ path = "src/main.rs"
 strip = true
 
 [dependencies]
-# The headless core plus — behind its `render` feature — the renderer, HUD text and scene
-# shared with the Linux and Windows binaries. This crate is the window, the event loop and
-# the CoreGraphics capture backend.
-hakai-core = { path = "../hakai-core", features = ["render"] }
+# The headless core plus — behind its `shell` feature — the renderer, scene and the winit
+# shell (windows, event loop, input) shared with the Windows build. This crate is just
+# the macOS hooks: window level, CoreGraphics capture, ⌘Q.
+hakai-core = { path = "../hakai-core", features = ["shell"] }
 
-# wgpu 30, same as hakai-core's renderer. Metal offers a non-opaque CAMetalLayer
-# (PostMultiplied), which is all a transparent overlay needs on macOS. Only the
-# instance/adapter/device/surface setup names wgpu here.
+# Only the instance setup names wgpu here. Metal offers a non-opaque CAMetalLayer
+# (PostMultiplied), which is all a transparent overlay needs on macOS.
 wgpu = "30"
 raw-window-handle = "0.6"
-pollster = "0.3"
 
 env_logger = "0.11"
 log = "0.4"
-
-winit = "0.30"
 
 # Real audio — hakai's audio.rs, #[path]-included verbatim as on Windows. cpal picks the
 # CoreAudio host on macOS; hound decodes the bundled WAVs.

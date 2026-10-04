@@ -1,9 +1,5 @@
 //! Desktop capture on macOS — the producer for `capture::BrightnessMap`.
 //!
-//! Named `duplication` / `DesktopDuplication` only because `state.rs` is `#[path]`-shared
-//! with hakai-win and refers to it by that name; the API is the same (`capture` hands a
-//! strided BGRA buffer to a closure), the mechanism is not.
-//!
 //! `CGWindowListCreateImage(…, OnScreenBelowWindow, overlay)` captures the primary display
 //! with everything at or above the overlay window left out — the same exclusion the Swift
 //! original gets from `SCContentFilter(excludingApplications: [self])`, without having to
@@ -19,6 +15,8 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
+
+use hakai_core::shell::DesktopCapture;
 
 use crate::macos::*;
 
@@ -73,14 +71,18 @@ impl DesktopDuplication {
         Some(Self { request, in_flight, latest })
     }
 
-    /// Hands the newest finished capture to `f` as `(bytes, width, height, stride)` and
-    /// queues the next one. `None` while the first capture is still in flight.
-    pub fn capture<R>(&mut self, f: impl FnOnce(&[u8], u32, u32, u32) -> R) -> Option<R> {
+}
+
+impl DesktopCapture for DesktopDuplication {
+    /// Hands the newest finished capture to `f` and queues the next one. `false` while
+    /// the first capture is still in flight.
+    fn capture(&mut self, f: &mut dyn FnMut(&[u8], u32, u32, u32)) -> bool {
         if !self.in_flight.swap(true, Ordering::AcqRel) {
             let _ = self.request.send(());
         }
-        let frame = self.latest.lock().ok()?.take()?;
-        Some(f(&frame.bytes, frame.width, frame.height, frame.width * 4))
+        let Some(frame) = self.latest.lock().ok().and_then(|mut slot| slot.take()) else { return false };
+        f(&frame.bytes, frame.width, frame.height, frame.width * 4);
+        true
     }
 }
 
