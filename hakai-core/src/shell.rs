@@ -20,9 +20,9 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use winit::application::ApplicationHandler;
-use winit::event::{ElementState, MouseButton, WindowEvent};
-use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy, OwnedDisplayHandle};
-use winit::keyboard::{KeyCode, ModifiersState, PhysicalKey};
+use winit::event::{ElementState, MouseButton, Touch, TouchPhase, WindowEvent};
+use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopBuilder, EventLoopProxy, OwnedDisplayHandle};
+use winit::keyboard::{Key, KeyCode, ModifiersState, NamedKey, PhysicalKey};
 use winit::monitor::MonitorHandle;
 use winit::window::{Fullscreen, Window, WindowAttributes, WindowId, WindowLevel};
 
@@ -31,7 +31,7 @@ pub use winit;
 use crate::audio::AudioSink;
 use crate::icons::ToolIcons;
 use crate::render::text::TextRenderer;
-use crate::render::{Assets, HudColors, Scene};
+use crate::render::{hud_bar_at, palette_tool_at, Assets, HudColors, Scene, HUD_HINT_TEXT};
 use crate::sprites::SpriteFactory;
 use crate::tools::ToolId;
 use crate::DecalFactory;
@@ -126,16 +126,48 @@ pub trait Platform: 'static {
         None
     }
 
-    /// A platform quit chord on top of Esc (⌘Q on macOS).
+    /// A platform quit chord on top of Esc (⌘Q on macOS, Back on Android).
     fn is_quit_key(&self, _code: KeyCode, _modifiers: ModifiersState) -> bool {
         false
     }
+
+    /// The status bar's hint text. Keyboard platforms keep the key list; touch-only ones
+    /// explain the tap/long-press controls instead.
+    fn hud_hint(&self) -> &'static str {
+        HUD_HINT_TEXT
+    }
+
+    /// Adjusts the event loop before it's built (Android hands it the `AndroidApp`).
+    fn configure_event_loop(&mut self, _builder: &mut EventLoopBuilder<ShellEvent>) {}
+
+    /// Quit when the app is sent to the background (Android: its window and surfaces are
+    /// gone until it's resumed, and a fresh start is simpler than rebuilding them).
+    fn quit_when_suspended(&self) -> bool {
+        false
+    }
+}
+
+/// How long a press on the status bar has to last to count as a long press (credits).
+const LONG_PRESS: f32 = 0.6;
+
+/// What the finger currently down is doing. One finger at a time drives everything; the
+/// rest are ignored, like a second mouse would be.
+#[derive(Clone, Copy)]
+enum TouchRole {
+    /// Using the active tool — press, drag, release, like the left mouse button.
+    Tool,
+    /// Held on the status bar: a tap opens the palette, a long press the credits.
+    Bar(Instant),
+    /// Already handled on touch-down (closing a panel, picking a tool) — swallow the rest.
+    Consumed,
 }
 
 /// Runs the shell until the user quits. `HAKAI_WINDOWED=1` gives a single ordinary window
 /// instead of the overlay.
 pub fn run(mut platform: impl Platform) {
-    let event_loop = match EventLoop::<ShellEvent>::with_user_event().build() {
+    let mut builder = EventLoop::<ShellEvent>::with_user_event();
+    platform.configure_event_loop(&mut builder);
+    let event_loop = match builder.build() {
         Ok(event_loop) => event_loop,
         Err(e) => {
             // On Linux: neither a Wayland nor an X11 display to open (a TTY, SSH).
@@ -154,6 +186,7 @@ pub fn run(mut platform: impl Platform) {
         last_capture: None,
         modifiers: ModifiersState::default(),
         cursor: (0.0, 0.0),
+        touch: None,
         _gpu: None,
     };
     event_loop.run_app(&mut app).expect("run_app");
@@ -180,6 +213,8 @@ struct App<P: Platform> {
     modifiers: ModifiersState,
     /// Last cursor position, in the focused layer's point space.
     cursor: (f32, f32),
+    /// The finger currently down: its id, the layer it's on, and what it's doing.
+    touch: Option<(u64, usize, TouchRole)>,
     /// Kept alive for the surfaces made from them.
     _gpu: Option<(wgpu::Instance, wgpu::Adapter)>,
 }
@@ -274,8 +309,18 @@ impl<P: Platform> App<P> {
         let mut sprites = SpriteFactory::new();
         let mut text = TextRenderer::new();
         let w0_points = logical_size(&self.windows[0]).0 as f32;
-        let assets =
-            Assets::build(device, queue, format, &mut icons, &mut sprites, &mut decals, &mut text, hud_colors, w0_points);
+        let assets = Assets::build(
+            device,
+            queue,
+            format,
+            &mut icons,
+            &mut sprites,
+            &mut decals,
+            &mut text,
+            hud_colors,
+            w0_points,
+            self.platform.hud_hint(),
+        );
 
         let audio = self.platform.audio();
         let mut scene = Scene {
@@ -318,6 +363,66 @@ impl<P: Platform> App<P> {
         self.scene = Some(scene);
     }
 
+    /// Touch input — the only input on a phone, and a bonus on touchscreen laptops. The
+    /// first finger down acts as the left mouse button, plus the controls a keyboard would
+    /// otherwise provide: tap the status bar for the palette, long-press it for credits,
+    /// tap a palette tool to pick it, tap anywhere to close an open panel.
+    fn touch_event(&mut self, idx: usize, touch: Touch) {
+        let Some(scene) = self.scene.as_mut() else { return };
+        let scale = scene.layers[idx].scale.max(0.01);
+        let p = (touch.location.x as f32 / scale, touch.location.y as f32 / scale);
+
+        match touch.phase {
+            TouchPhase::Started => {
+                if self.touch.is_some() {
+                    return;
+                }
+                self.cursor = p;
+                scene.focused_layer = Some(idx);
+                let layer = &scene.layers[idx];
+                let screen = (layer.width as f32, layer.height as f32);
+                let role = if layer.hud.credits_open() {
+                    scene.toggle_credits();
+                    TouchRole::Consumed
+                } else if layer.hud.palette_open() {
+                    if let Some(tool) = palette_tool_at(p, screen) {
+                        scene.select_tool(tool);
+                    }
+                    scene.set_palette_visible(false);
+                    TouchRole::Consumed
+                } else if hud_bar_at(p, screen) {
+                    TouchRole::Bar(Instant::now())
+                } else {
+                    scene.pointer_moved(idx, p);
+                    scene.pointer_pressed(idx, p);
+                    TouchRole::Tool
+                };
+                self.touch = Some((touch.id, idx, role));
+            }
+            TouchPhase::Moved => {
+                if let Some((id, layer, TouchRole::Tool)) = self.touch {
+                    if id == touch.id && layer == idx {
+                        self.cursor = p;
+                        scene.pointer_moved(idx, p);
+                    }
+                }
+            }
+            TouchPhase::Ended | TouchPhase::Cancelled => {
+                let Some((id, layer, role)) = self.touch else { return };
+                if id != touch.id || layer != idx {
+                    return;
+                }
+                self.touch = None;
+                match role {
+                    TouchRole::Tool => scene.pointer_released(idx, p),
+                    TouchRole::Bar(since) if since.elapsed().as_secs_f32() >= LONG_PRESS => scene.toggle_credits(),
+                    TouchRole::Bar(_) => scene.set_palette_visible(true),
+                    TouchRole::Consumed => {}
+                }
+            }
+        }
+    }
+
     /// Requests a fresh desktop capture if one is due (every `CAPTURE_INTERVAL`, or the
     /// moment a frozen output still lacks its snapshot) and feeds it to every output.
     fn capture_tick(&mut self) {
@@ -344,6 +449,12 @@ impl<P: Platform> ApplicationHandler<ShellEvent> for App<P> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.windows.is_empty() {
             self.init(event_loop);
+        }
+    }
+
+    fn suspended(&mut self, event_loop: &ActiveEventLoop) {
+        if self.platform.quit_when_suspended() {
+            event_loop.exit();
         }
     }
 
@@ -388,6 +499,11 @@ impl<P: Platform> ApplicationHandler<ShellEvent> for App<P> {
             }
 
             WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed => {
+                // Android's Back button arrives with no physical key code, only this.
+                if event.logical_key == Key::Named(NamedKey::BrowserBack) {
+                    event_loop.exit();
+                    return;
+                }
                 let PhysicalKey::Code(code) = event.physical_key else { return };
                 if code == KeyCode::Escape || self.platform.is_quit_key(code, self.modifiers) {
                     event_loop.exit();
@@ -441,6 +557,12 @@ impl<P: Platform> ApplicationHandler<ShellEvent> for App<P> {
             WindowEvent::MouseInput { state: ElementState::Released, button: MouseButton::Left, .. } => {
                 if let Some(idx) = idx {
                     scene.pointer_released(idx, self.cursor);
+                }
+            }
+
+            WindowEvent::Touch(touch) => {
+                if let Some(idx) = idx {
+                    self.touch_event(idx, touch);
                 }
             }
 

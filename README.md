@@ -1,7 +1,7 @@
 # Hakai (破壊)
 
 A native desktop-destruction toy for **Linux** (Wayland/Hyprland, made for **Omarchy**),
-**Windows** and **macOS** — smash, burn, shoot, paint and squish your live desktop with
+**Windows**, **macOS** and **Android** — smash, burn, shoot, paint and squish your live desktop with
 nine tools, then watch it wander off on its own (termites) or wipe it clean again (the
 washer).
 
@@ -10,7 +10,8 @@ Hakai is Japanese for *destruction*. It's a Rust/`wgpu` reimplementation of
 Němeček — written independently, not a code fork. One shared core (every tool, the
 renderer, the scene, a winit window shell) runs under thin native front ends: a
 `wlr-layer-shell` overlay on Hyprland and friends, fullscreen windows on GNOME and X11, a
-DirectComposition overlay on Windows, and a Metal overlay on macOS. See
+DirectComposition overlay on Windows, a Metal overlay on macOS, and a translucent activity
+on Android. See
 [`CREDITS.md`](CREDITS.md) for the full sound/font attribution.
 
 | Platform | Get it | Notes |
@@ -18,6 +19,7 @@ DirectComposition overlay on Windows, and a Metal overlay on macOS. See
 | Linux | [Releases](https://github.com/matjaz/hakai/releases) `.deb`, `.rpm` or tarball (x86_64, aarch64), or `makepkg` | Any Wayland or X11 desktop; native overlay on Hyprland, Sway, KDE Plasma, …; Omarchy theme colours |
 | Windows 10/11 | [Releases](https://github.com/matjaz/hakai/releases) `.zip` (x86_64) | Portable, unsigned — SmartScreen shows once |
 | macOS 11+ | [Releases](https://github.com/matjaz/hakai/releases) `.dmg` (universal) | Not notarised — *Open Anyway* once |
+| Android 8+ | [Releases](https://github.com/matjaz/hakai/releases) `.apk` (arm64) | Sideload; landscape; smashes the home screen behind it |
 
 ## What it does
 
@@ -202,19 +204,45 @@ cargo run --release --manifest-path hakai-mac/Cargo.toml   # run it
 hakai-mac/package.sh                                        # build the universal release DMG
 ```
 
+## Android
+
+`hakai-android/` is the Android build — a `cdylib` loaded by Android's `NativeActivity`
+(android-activity glue, no Java of its own) on the same `hakai_core::shell` as Windows and
+macOS, rendering with Vulkan (GLES as the fallback) and playing sound through AAudio.
+
+Phones can't overlay other apps the way a desktop window can, but they don't need to here:
+the activity is **translucent**, so whatever it's launched over — normally the home screen —
+stays visible behind it, and that's what you smash. No special permission. It runs in
+landscape (the HUD and the tool palette need the width), and touch replaces the keyboard:
+
+- drag to use the current tool,
+- tap the status bar for the tool palette, tap a tool to pick it,
+- long-press the status bar for the credits, tap anywhere to close a panel,
+- Back quits; so does leaving the app.
+
+Install the `.apk` from the releases page (allow installs from your browser or file
+manager when Android asks). Building it needs the Android SDK + NDK, a JDK and cargo-apk —
+see the header of [`hakai-android/package.sh`](hakai-android/package.sh):
+
+```sh
+rustup target add aarch64-linux-android && cargo install cargo-apk
+hakai-android/package.sh                     # → hakai-android/target/hakai-<ver>-android-arm64.apk
+```
+
 ## Releases
 
 Every platform's release file follows one pattern —
 `hakai-<version>-linux-<arch>.tar.gz`, `hakai-<version>-windows-x86_64.zip`,
-`hakai-<version>-macos-universal.dmg` — and the `.deb`/`.rpm` keep their distros' own
-naming. The program itself is `hakai` everywhere (`hakai.exe`, `Hakai.app`).
+`hakai-<version>-macos-universal.dmg`, `hakai-<version>-android-arm64.apk` — and the
+`.deb`/`.rpm` keep their distros' own naming. The program itself is `hakai` everywhere
+(`hakai.exe`, `Hakai.app`, `libhakai.so`).
 
 CI builds and packages every platform on each push — Linux `.deb`, `.rpm` and tarball
 (x86_64, aarch64; one build each, wrapped three ways by
 [nfpm](https://nfpm.goreleaser.com)), the Windows zip and the universal macOS DMG — and keeps them as workflow artifacts for two
 weeks. Pushing a `v*` tag additionally publishes those same artifacts (plus `SHA256SUMS`)
 as a GitHub release, without rebuilding anything. The tag has to match the crates'
-`version` (`v1.0.0` ↔ `1.0.0` in `hakai-linux`, `hakai-win` and `hakai-mac`), or the release
+`version` (`v1.0.0` ↔ `1.0.0` in `hakai-linux`, `hakai-win`, `hakai-mac` and `hakai-android`), or the release
 job refuses.
 
 ```sh
@@ -231,6 +259,8 @@ hakai-win/     the Windows binary — a DirectComposition overlay, winit, DXGI D
                Duplication; package.ps1 → portable zip
 hakai-mac/     the macOS binary — a screensaver-level Metal overlay, winit, CoreGraphics
                capture; package.sh → universal DMG
+hakai-android/ the Android library — a translucent NativeActivity on the winit shell,
+               touch controls; package.sh → APK
 hakai-core/    the shared library — headless by default (tiled damage layer, procedural
                decal/icon/sprite generators, all nine tools, termite colony, particles,
                HUD/credits logic); its `render` feature adds the wgpu renderer, HUD text
@@ -269,6 +299,10 @@ normal display. See `WINDOWS-PLAN.md` for what's confirmed and what isn't.
 The macOS build is functional — overlay above the menu bar and Dock, all nine tools,
 audio, a universal DMG — verified on Apple silicon (M3 Pro). Intel and multi-monitor
 setups are built but not yet tried on real hardware.
+
+The Android build is new: it builds into a signed arm64 APK, but hasn't yet run on a
+device — whether the translucent window really shows the home screen behind it on every
+phone (and which Vulkan/GLES drivers get the alpha right) is the open question.
 
 The Linux GNOME/X11 fallback is tested in headless sessions (Weston without layer-shell,
 Xvfb + openbox; Mesa's software renderer) — window, fullscreen, tools, HUD and input all

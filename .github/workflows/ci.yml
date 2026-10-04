@@ -146,13 +146,59 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  # hakai-android (an arm64 APK). Build-only like the rest. GitHub's Ubuntu runners ship
+  # the Android SDK, an NDK and JDK 17; this adds the API 35 platform (the newest an NDK
+  # r27–r29 accepts) and cargo-apk.
+  #
+  # Signing: with the ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD secrets set, the
+  # APK is signed with that release key — required for users to install one release over
+  # another. Without them it's signed with a throwaway debug key made on the runner, so
+  # every release would need an uninstall first.
+  hakai-android:
+    name: hakai-android (arm64 APK — build + package, no device in CI)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            hakai-android
+            hakai-core
+
+      - name: Install cargo-apk and the API 35 platform
+        run: |
+          cargo install --locked cargo-apk
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" >/dev/null
+
+      - name: Build + package (hakai-android/package.sh → APK)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          export ANDROID_NDK_ROOT="$ANDROID_NDK_LATEST_HOME"
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            export ANDROID_KEYSTORE="$RUNNER_TEMP/release.keystore"
+          fi
+          hakai-android/package.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hakai-android
+          path: hakai-android/target/hakai-*-android-*.apk
+          if-no-files-found: error
+          retention-days: 14
+
   # Tag pushes only: gather the artifacts the jobs above already built and publish them as
   # a GitHub release. The tag must match the crates' version (v1.0.0 ↔ version = "1.0.0"),
   # since that version is what the artifact file names carry.
   release:
     name: Release (v* tags)
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [hakai-core, hakai-linux, hakai-win, hakai-mac]
+    needs: [hakai-core, hakai-linux, hakai-win, hakai-mac, hakai-android]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -162,7 +208,7 @@ jobs:
       - name: Tag matches the crate versions
         run: |
           want="${GITHUB_REF_NAME#v}"
-          for m in hakai-linux hakai-win hakai-mac; do
+          for m in hakai-linux hakai-win hakai-mac hakai-android; do
             got="$(sed -nE 's/^version *= *"([^"]+)".*/\1/p' "$m/Cargo.toml" | head -1)"
             if [ "$got" != "$want" ]; then
               echo "::error::$GITHUB_REF_NAME doesn't match $m/Cargo.toml version $got"

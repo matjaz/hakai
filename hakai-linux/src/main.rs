@@ -404,6 +404,7 @@ impl State {
             // size isn't known until the first `configure`.
             let assets = Assets::build(
                 device, queue, format, &mut icons, &mut sprites, &mut decals, &mut text, self.hud_colors, 1920.0,
+                hakai_core::render::HUD_HINT_TEXT,
             );
             let audio = self.audio.take().unwrap_or_default();
             let mut scene = Scene {

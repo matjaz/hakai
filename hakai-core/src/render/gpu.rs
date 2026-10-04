@@ -361,7 +361,9 @@ const HUD_HINT_SIZE: f32 = 12.0;
 const HUD_TOAST_BOTTOM_MARGIN: f32 = 92.0;
 const HUD_TOAST_SIZE: f32 = 15.0;
 
-const HUD_HINT_TEXT: &str = "1\u{2013}9 tool \u{b7} \u{2191}\u{2193} palette \u{b7} M mode \u{b7} C credits \u{b7} R clear \u{b7} Esc quit";
+/// The status bar's key hint on a keyboard platform. Touch platforms pass their own to
+/// [`Assets::build`].
+pub const HUD_HINT_TEXT: &str = "1\u{2013}9 tool \u{b7} \u{2191}\u{2193} palette \u{b7} M mode \u{b7} C credits \u{b7} R clear \u{b7} Esc quit";
 
 // ── Tool palette layout ──────────────────────────────────────────────────────────────────
 
@@ -385,6 +387,13 @@ fn palette_cell_center(index: usize, screen: (f32, f32)) -> (f32, f32) {
     let x = palette_start_x(screen.0) + index as f32 * (PALETTE_CELL + PALETTE_GAP) + PALETTE_CELL / 2.0;
     let y = screen.1 - PALETTE_BOTTOM_MARGIN - PALETTE_CELL / 2.0;
     (x, y)
+}
+
+/// Whether `point` (points) is on the status bar — the touch platforms' handle for opening
+/// the palette, since there's no ↑ key to press.
+pub fn hud_bar_at(point: (f32, f32), screen: (f32, f32)) -> bool {
+    let center = (screen.0 / 2.0, screen.1 - HUD_BAR_BOTTOM_MARGIN);
+    (point.0 - center.0).abs() <= HUD_BAR_SIZE.0 / 2.0 && (point.1 - center.1).abs() <= HUD_BAR_SIZE.1 / 2.0 + 8.0
 }
 
 /// The tool under `point`, or `None` — the palette's hit-test. Half-gap margin so a click
@@ -809,6 +818,7 @@ impl Assets {
         text: &mut TextRenderer,
         hud_colors: theme::HudColors,
         screen_width: f32,
+        hud_hint: &str,
     ) -> Self {
         let pipelines = create_pipelines(&device, format);
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -863,7 +873,7 @@ impl Assets {
             Some((hud_rgba(hud_colors.foreground, 56), 1.0)),
         );
         let hud_panel = create_hud_gpu(&device, &queue, &pipelines.tile_bind_group_layout, &sampler, &hud_panel_pixmap, String::new());
-        let hud_hint = create_hud_text(&device, &queue, &pipelines.tile_bind_group_layout, &sampler, text, HUD_HINT_TEXT, HUD_HINT_SIZE, false, hud_rgba_arr(hud_colors.foreground, 153));
+        let hud_hint = create_hud_text(&device, &queue, &pipelines.tile_bind_group_layout, &sampler, text, hud_hint, HUD_HINT_SIZE, false, hud_rgba_arr(hud_colors.foreground, 153));
         let initial_label = format!("{} \u{b7} {}", ToolId::Hammer.key_digit(), ToolId::Hammer.display_name());
         let hud_label = create_hud_text(&device, &queue, &pipelines.tile_bind_group_layout, &sampler, text, &initial_label, HUD_LABEL_SIZE, false, hud_rgba_arr(hud_colors.foreground, 255));
 

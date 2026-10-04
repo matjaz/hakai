@@ -20,6 +20,6 @@ pub mod scene;
 pub mod text;
 pub mod theme;
 
-pub use gpu::{palette_tool_at, render, Assets, Pipelines};
+pub use gpu::{hud_bar_at, palette_tool_at, render, Assets, Pipelines, HUD_HINT_TEXT};
 pub use scene::{GpuLayer, Scene};
 pub use theme::HudColors;
