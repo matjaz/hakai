@@ -1,20 +1,29 @@
 # Hakai (破壊)
 
-A native Wayland/Hyprland desktop-destruction toy for **Omarchy** — smash, burn, shoot,
-paint and squish your live desktop with nine tools, then watch it wander off on its own
-(termites) or wipe it clean again (the washer).
+A native desktop-destruction toy for **Linux** (Wayland/Hyprland, made for **Omarchy**),
+**Windows** and **macOS** — smash, burn, shoot, paint and squish your live desktop with
+nine tools, then watch it wander off on its own (termites) or wipe it clean again (the
+washer).
 
-Hakai is Japanese for *destruction*. It's a Rust/`wgpu`/Hyprland port of
-[Desktop Destroyer](http://www.breatharian.eu/Petr/en/program/misc.htm), a macOS
-SpriteKit/AppKit toy by Miroslav Němeček — reimplemented independently for Linux, not a
-code fork. See [`CREDITS.md`](CREDITS.md) for the full sound/font attribution.
+Hakai is Japanese for *destruction*. It's a Rust/`wgpu` reimplementation of
+[Desktop Destroyer](http://www.breatharian.eu/Petr/en/program/misc.htm) by Miroslav
+Němeček — written independently, not a code fork. One shared core (every tool, the
+renderer, the scene) runs under three thin native shells: a `wlr-layer-shell` overlay on
+Hyprland, a DirectComposition overlay on Windows, and a Metal overlay on macOS. See
+[`CREDITS.md`](CREDITS.md) for the full sound/font attribution.
+
+| Platform | Get it | Notes |
+|---|---|---|
+| Linux (Hyprland) | [Releases](https://github.com/matjaz/hakai/releases) tarball (x86_64, aarch64), or `makepkg` | Needs a Hyprland session; Omarchy theme colours |
+| Windows 10/11 | [Releases](https://github.com/matjaz/hakai/releases) `.zip` (x86_64) | Portable, unsigned — SmartScreen shows once |
+| macOS 11+ | [Releases](https://github.com/matjaz/hakai/releases) `.dmg` (universal) | Not notarised — *Open Anyway* once |
 
 ## What it does
 
-A full-screen, always-on-top, transparent overlay sits above your real desktop and takes
-an exclusive keyboard grab (`Esc` always gets you out, and Hyprland still dispatches its
-own compositor binds — `SUPER`-anything — underneath it regardless). Nine tools, each a
-faithful port of the original's own behaviour:
+A full-screen, always-on-top, transparent overlay sits above your real desktop — one per
+monitor — and takes the keyboard (`Esc` always gets you out; on Hyprland the compositor's
+own `SUPER` binds still work underneath it, on Windows Alt+Tab and the Windows key do, on
+macOS ⌘Q quits too). Nine tools, each a faithful port of the original's own behaviour:
 
 | Key | Tool | What it does |
 |---|---|---|
@@ -22,7 +31,7 @@ faithful port of the original's own behaviour:
 | `2` | Chain-saw | Cuts continuously while dragged; revs up with movement, not just the button |
 | `3` | Machine gun | Punches bullet holes, ejects shells, flashes on fire |
 | `4` | Flame-thrower | Leaves standing fires that spread, flicker, and burn out into scorch marks — and keep doing all of that even after you switch tools |
-| `5` | Color-thrower | Splats paint in your active Omarchy theme's own colours |
+| `5` | Color-thrower | Splats paint — in your active Omarchy theme's own colours on Omarchy |
 | `6` | Phaser | A sustained beam |
 | `7` | Stamp | Stamps a random bureaucratic verdict (`REJECTED`, `APPROVED`, `TOP SECRET`, ...) |
 | `8` | Termites | Releases bugs that wander the desktop and eat it, one bite at a time |
@@ -32,15 +41,29 @@ Plus: `Tab` / `Shift+Tab` cycles tools, `↑`/`↓` opens/closes the tool palett
 the view to a snapshot (so the *real* desktop underneath can keep changing without
 disturbing what you're smashing), `C` opens the credits panel, `R` clears everything.
 
+The impact sound follows the brightness of whatever's under the cursor (hollow on dark,
+glassy on light), like the original — each platform reads the screen its own way
+(`wlr-screencopy`, DXGI Desktop Duplication, CoreGraphics), and falls back to a random
+variant where it can't.
+
 ![Hakai mid-rampage — cracks, bullet holes, scorch marks, paint splats, stamps and termites over a desktop background, with the status bar and tool palette visible](assets/hakai.jpg)
 
 ## Installing
+
+**Windows and macOS:** see [Windows](#windows) and [macOS](#macos) below — download, run.
+
+### Linux
 
 Needs a real Hyprland session (Wayland, `wlr-layer-shell`) — this won't run on X11,
 GNOME, or KDE, and there's no plan to support them (see the non-goals in the project's
 own port-planning notes).
 
-Not yet on the AUR (registration is currently locked down repo-wide after a wave of
+The release tarball (`hakai-<version>-<arch>-linux.tar.gz`) holds the binary, a
+`.desktop` entry and its icon — e.g. `install -Dm755 hakai ~/.local/bin/hakai`, plus
+`hakai.desktop` → `~/.local/share/applications/` and `hakai.png` →
+`~/.local/share/icons/hicolor/256x256/apps/` for a launcher entry.
+
+For a tracked package, it's not yet on the AUR (registration is currently locked down repo-wide after a wave of
 malicious package uploads in mid-2026 — nothing to do with this package specifically;
 submission will follow once that reopens). Until then, install directly with `makepkg`,
 using the `PKGBUILD` already in this repo — confirmed working end to end on real
@@ -70,7 +93,8 @@ BUILDDIR="$HOME/.cache/hakai-git-build" makepkg -si
 
 ## Building from source (development)
 
-For working on `hakai` itself, rather than installing it:
+For working on the Linux binary itself, rather than installing it (the Windows and macOS
+build commands are in their own sections below):
 
 ```bash
 cd hakai
@@ -101,8 +125,8 @@ o.bind("SUPER + SHIFT + ALT + H", "Stop destroying it", "pkill -x hakai")
 
 ## Windows
 
-There's a native Windows build — `hakai-win/`, a separate binary crate against the same
-unchanged `hakai-core`. It's a transparent Direct3D 12 overlay (one per monitor) with the
+`hakai-win/` is the Windows build — a separate binary crate against the same
+`hakai-core`. It's a transparent Direct3D 12 overlay (one per monitor) with the
 same nine tools, `cpal`/WASAPI audio, and DXGI Desktop Duplication standing in for
 `wlr-screencopy`. `theme.rs` is stubbed — it ships the built-in palette, since Windows has
 no coherent system theme to read.
@@ -120,22 +144,22 @@ cargo run  --release --manifest-path hakai-win/Cargo.toml   # run it
 powershell -File hakai-win/package.ps1                       # build the release zip
 ```
 
-Both binaries build against `wgpu` 30 (the Windows side forced the bump — wgpu 22's D3D12
+All three binaries build against `wgpu` 30 (the Windows side forced the bump — wgpu 22's D3D12
 backend can't present a per-pixel-alpha surface to a plain window, and the
-`DirectComposition` path that can only landed later; the Linux side followed). The renderer
-and the whole per-output scene live in `hakai_core::render`, behind the crate's
+`DirectComposition` path that can only landed later; Linux and macOS followed). The
+renderer and the whole per-output scene live in `hakai_core::render`, behind the crate's
 off-by-default `render` feature; each binary is just its window, its event loop and its
 screen-capture backend (`zwlr_screencopy_v1` on Wayland, DXGI Desktop Duplication on
-Windows).
+Windows, `CGWindowListCreateImage` on macOS).
 
 See `WINDOWS-PORT.md` (analysis) and `WINDOWS-PLAN.md` (the phased build log) for the full
 story.
 
 ## macOS
 
-`hakai-mac/` is the macOS build — a third binary crate on the same `hakai-core`, sharing
-`hakai-win`'s winit/wgpu 30 scene and renderer verbatim (`#[path]`). Metal draws into a
-non-opaque `CAMetalLayer`; the overlay is lifted to the screensaver window level so it
+`hakai-mac/` is the macOS build — a third binary crate on `hakai-core`'s shared renderer
+and scene, with a winit event loop like `hakai-win`. Metal draws into a non-opaque
+`CAMetalLayer`; the overlay is lifted to the screensaver window level so it
 covers the menu bar and the Dock too, on every Space and every display (the recipe from
 the Swift original's `OverlayWindow`). The brightness-driven impact sound reads the screen
 with `CGWindowListCreateImage`, excluding the overlay itself — that needs the *Screen
@@ -167,20 +191,21 @@ git tag v0.0.1 && git push origin v0.0.1
 ## Layout
 
 ```
-hakai/         the Linux binary — wlr-layer-shell + wgpu rendering, Wayland input, cpal
-               audio, screen capture, Omarchy theme integration
+hakai/         the Linux binary — wlr-layer-shell surfaces, Wayland input, cpal audio,
+               wlr-screencopy capture, Omarchy theme integration; package.sh → tarball
 hakai-win/     the Windows binary — a DirectComposition overlay, winit, DXGI Desktop
-               Duplication; same hakai-core, audio.rs and text.rs shared verbatim
-hakai-mac/     the macOS binary — a screensaver-level Metal overlay, CoreGraphics capture;
-               reuses hakai-win's scene/renderer and hakai's audio.rs/text.rs verbatim
-hakai-core/    headless library — everything that doesn't need a window: the tiled damage
-               layer, procedural decal/icon/sprite generators, all nine tools, the termite
-               colony, particle system, HUD/credits logic
+               Duplication; package.ps1 → portable zip
+hakai-mac/     the macOS binary — a screensaver-level Metal overlay, winit, CoreGraphics
+               capture; package.sh → universal DMG
+hakai-core/    the shared library — headless by default (tiled damage layer, procedural
+               decal/icon/sprite generators, all nine tools, termite colony, particles,
+               HUD/credits logic); its `render` feature adds the wgpu renderer, HUD text
+               and the per-output scene all three binaries draw with
 packaging/     PKGBUILD (AUR, -git), .desktop entry, Hyprland keybind snippet
 ```
 
-Not a formal Cargo workspace, deliberately — `hakai` depends on `hakai-core` via a plain
-relative path instead. Each crate has its own `PHASE*.md` walkthrough documenting how it
+Not a formal Cargo workspace, deliberately — each binary depends on `hakai-core` via a
+plain relative path instead. Each crate has its own `PHASE*.md` walkthrough documenting how it
 was built, chunk by chunk, including every real bug found along the way and how it was
 fixed; `PHASE8.md` at the repo root covers packaging, the one phase that's inherently
 cross-cutting.
@@ -204,6 +229,10 @@ The Windows build is functional end to end — overlay, all nine tools, audio, b
 capture, multi-monitor scaffolding, a portable zip that runs on a clean box. Verified on
 real hardware, though some checks (every tool, multiple monitors) are still pending a
 normal display. See `WINDOWS-PLAN.md` for what's confirmed and what isn't.
+
+The macOS build is functional — overlay above the menu bar and Dock, all nine tools,
+audio, a universal DMG — verified on Apple silicon (M3 Pro). Intel and multi-monitor
+setups are built but not yet tried on real hardware.
 
 ## License
 

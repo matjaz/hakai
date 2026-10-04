@@ -1,4 +1,5 @@
-//! The wgpu renderer — shared by `hakai` (Wayland) and `hakai-win` (Win32/DXGI).
+//! The wgpu renderer — shared by `hakai` (Wayland), `hakai-win` (Win32/DXGI) and
+//! `hakai-mac` (AppKit/Metal).
 //!
 //! Everything platform-specific — creating the window, the event loop, the surface, and
 //! the screen-capture backend — stays in each binary. What lives here is the part that was

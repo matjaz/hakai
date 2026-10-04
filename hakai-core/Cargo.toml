@@ -14,9 +14,9 @@ path = "src/lib.rs"
 [features]
 # The GPU renderer — pipelines, the per-frame draw, HUD text shaping, and the
 # platform-agnostic scene `State`/`GpuLayer`. Off by default so `cargo test` (and the
-# headless CI job) stay exactly as light as before: no wgpu, no cosmic-text. The two
-# binaries (`hakai`, `hakai-win`) turn it on; each still owns its own window, event loop
-# and screen-capture backend.
+# headless CI job) stay exactly as light as before: no wgpu, no cosmic-text. All three
+# binaries (`hakai`, `hakai-win`, `hakai-mac`) turn it on; each still owns its own window,
+# event loop and screen-capture backend.
 render = ["dep:wgpu", "dep:bytemuck", "dep:cosmic-text", "dep:raw-window-handle", "dep:log"]
 
 [dependencies]
@@ -34,8 +34,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 # --- `render` feature only (see [features] above) ---------------------------------------
-# Kept in lockstep with both binaries' own pins. wgpu 30: the Windows binary needs 27+ for
-# its DirectComposition transparency path; the Linux binary was bumped to match.
+# Kept in lockstep with the binaries' own pins. wgpu 30: the Windows binary needs 27+ for
+# its DirectComposition transparency path; the Linux and macOS binaries match it.
 wgpu = { version = "30", optional = true }
 raw-window-handle = { version = "0.6", optional = true }
 bytemuck = { version = "1", features = ["derive"], optional = true }
