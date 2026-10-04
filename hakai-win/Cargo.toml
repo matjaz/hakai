@@ -1,6 +1,6 @@
 [package]
 name = "hakai-win"
-version = "1.1.0"
+version = "1.2.0"
 edition = "2021"
 description = "Smash, burn and repaint your desktop — the Windows build of hakai."
 license = "MIT"
