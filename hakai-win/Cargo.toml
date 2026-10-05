@@ -5,7 +5,7 @@ edition = "2021"
 description = "Smash, burn and repaint your desktop — the Windows build of hakai."
 license = "MIT"
 repository = "https://github.com/matjaz/hakai"
-readme = "../README.md"
+readme = "README.txt"
 
 # The exe is `hakai.exe` — what the user sees; `hakai-win` is just the crate.
 [[bin]]

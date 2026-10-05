@@ -5,7 +5,7 @@ edition = "2021"
 description = "Smash, burn and repaint your desktop — the macOS build of hakai."
 license = "MIT"
 repository = "https://github.com/matjaz/hakai"
-readme = "../README.md"
+readme = "README.txt"
 
 # The binary inside Hakai.app is `hakai`; `hakai-mac` is just the crate.
 [[bin]]

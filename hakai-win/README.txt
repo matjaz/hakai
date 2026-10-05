@@ -67,6 +67,47 @@ Notes
   some hybrid-graphics laptops) and a random variant is used instead.
 
 
+Building
+--------
+
+From a checkout of the source repository. Needs the MSVC toolchain (rustup picks
+x86_64-pc-windows-msvc by default; install "Desktop development with C++" from
+the VS Build Tools):
+
+    cargo run --release --manifest-path hakai-win/Cargo.toml
+    powershell -File hakai-win/package.ps1
+
+package.ps1 writes hakai-win/target/hakai-<version>-windows-x86_64.zip.
+
+This binary is a transparent Direct3D 12 overlay (one per monitor) on the shared
+hakai-core renderer: DirectComposition, cpal/WASAPI audio, and DXGI Desktop
+Duplication for the brightness-driven impact sound. There is no system theme to
+read, so the color-thrower and HUD use the built-in palette.
+
+The analysis, the phased plan, and the verification log live in the repository as
+WINDOWS-PORT.md, WINDOWS-PLAN.md, and WINDOWS-STATUS.md.
+
+
+Status
+------
+
+Functional end to end — overlay, all nine tools, audio, brightness capture,
+multi-monitor scaffolding, a portable zip that runs on a clean box. Verified on
+real hardware, though some checks (every tool, multiple monitors) are still
+pending a normal display, and none have a recorded re-run since the renderer and
+window shell moved into hakai-core. A secondary monitor's impact sounds follow
+the primary's screen, and a monitor plugged in while hakai runs gets no overlay
+until a restart. WINDOWS-STATUS.md records what is confirmed.
+
+
+Releases
+--------
+
+CI builds the zip on each push. A v* tag that matches this crate's version
+(and the same version in hakai-linux, hakai-mac, and hakai-android) publishes
+it. See .github/workflows/ci.yml.
+
+
 License
 -------
 

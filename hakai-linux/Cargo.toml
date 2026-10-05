@@ -5,7 +5,7 @@ edition = "2021"
 description = "Smash, burn and repaint your desktop — the Linux build of hakai (Wayland layer-shell overlay, GNOME/X11 fallback)."
 license = "MIT"
 repository = "https://github.com/matjaz/hakai"
-readme = "../README.md"
+readme = "README.md"
 
 # The command stays `hakai` — it's what keybinds, .desktop files and packages run.
 [[bin]]

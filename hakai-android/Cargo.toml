@@ -5,7 +5,7 @@ edition = "2021"
 description = "Smash, burn and repaint your screen — the Android build of hakai."
 license = "MIT"
 repository = "https://github.com/matjaz/hakai"
-readme = "../README.md"
+readme = "README.md"
 
 [lib]
 # Loaded by Android's NativeActivity as libhakai.so.
