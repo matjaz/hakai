@@ -107,20 +107,33 @@ fn packed(out: &mut Vec<CreditsLine>, items: &[String], columns: usize, color: T
 /// that has to break *inside* itself, which `packed` can't do. `CreditsPanel.swift`'s
 /// `paragraph`.
 fn paragraph(out: &mut Vec<CreditsLine>, text: &str, columns: usize, color: TextColor) {
+    wrapped(out, text, 11.0, color, 0.0, columns);
+}
+
+/// [`paragraph`] for any line: word-wraps `text` to `columns`, the first line carrying
+/// `gap_before`. A single word longer than the budget (a URL on a very narrow screen) gets
+/// a line of its own rather than being cut.
+fn wrapped(out: &mut Vec<CreditsLine>, text: &str, size: f32, color: TextColor, gap_before: f32, columns: usize) {
+    let mut gap = gap_before;
     let mut current = String::new();
     for word in text.split(' ') {
         let candidate = if current.is_empty() { word.to_string() } else { format!("{current} {word}") };
-        if candidate.chars().count() > columns {
-            push_line(out, current.clone(), 11.0, color, 0.0);
+        if candidate.chars().count() > columns && !current.is_empty() {
+            push_line(out, std::mem::take(&mut current), size, color, gap);
+            gap = 0.0;
             current = word.to_string();
         } else {
             current = candidate;
         }
     }
     if !current.is_empty() {
-        push_line(out, current, 11.0, color, 0.0);
+        push_line(out, current, size, color, gap);
     }
 }
+
+/// Prose wraps at most this wide, so a wide desktop panel keeps comfortable line lengths
+/// (the original's hand-broken ~60-character lines) while a phone wraps tighter.
+const PROSE_COLUMNS: usize = 64;
 
 /// `File:Hollow stick hit 2 (Gravity Sound).wav` → `Hollow stick hit 2`.
 ///
@@ -158,12 +171,13 @@ fn build_from(sounds: &BTreeMap<String, SoundEntry>, columns: usize) -> Vec<Cred
 
     push_line(&mut out, "Acknowledgements", 18.0, TextColor::White, 0.0);
 
-    push_line(&mut out, "GRAPHICS", 11.0, TextColor::Dim, 14.0);
-    push_line(&mut out, "Every decal, tool icon, sprite and this app's own icon is", 12.0, TextColor::White, 0.0);
-    push_line(&mut out, "generated procedurally while it runs.", 12.0, TextColor::White, 0.0);
-    push_line(&mut out, "There are no third-party image assets.", 12.0, TextColor::White, 0.0);
+    let prose = columns.min(PROSE_COLUMNS);
 
-    push_line(&mut out, format!("AUDIO  —  {} sounds, mono 44.1 kHz 16-bit", sounds.len()), 11.0, TextColor::Dim, 14.0);
+    push_line(&mut out, "GRAPHICS", 11.0, TextColor::Dim, 14.0);
+    wrapped(&mut out, "Every decal, tool icon, sprite and this app's own icon is generated procedurally while it runs.", 12.0, TextColor::White, 0.0, prose);
+    wrapped(&mut out, "There are no third-party image assets.", 12.0, TextColor::White, 0.0, prose);
+
+    wrapped(&mut out, &format!("AUDIO  —  {} sounds, mono 44.1 kHz 16-bit", sounds.len()), 11.0, TextColor::Dim, 14.0, columns);
 
     // Grouped by licence. A plain string sort of the licence names happens to put "CC BY
     // 4.0" — the one that actually carries an attribution obligation — first: `' '`
@@ -180,7 +194,7 @@ fn build_from(sounds: &BTreeMap<String, SoundEntry>, columns: usize) -> Vec<Cred
             Some(url) => format!("{license}  ·  {url}"),
             None => license.to_string(),
         };
-        push_line(&mut out, header, 12.0, TextColor::Accent, 12.0);
+        wrapped(&mut out, &header, 12.0, TextColor::Accent, 12.0, columns);
 
         let origin = if entries.first().map(|(_, e)| e.origin.as_str()) == Some("synth") {
             "synthesised in tools/synth_sounds.py"
@@ -188,7 +202,7 @@ fn build_from(sounds: &BTreeMap<String, SoundEntry>, columns: usize) -> Vec<Cred
             "from Wikimedia Commons"
         };
         let authors_joined = authors.into_iter().collect::<Vec<_>>().join(", ");
-        push_line(&mut out, format!("{} sounds by {authors_joined}, {origin}.", entries.len()), 12.0, TextColor::White, 0.0);
+        wrapped(&mut out, &format!("{} sounds by {authors_joined}, {origin}.", entries.len()), 12.0, TextColor::White, 0.0, columns);
 
         // The modification notice, once per distinct kind of processing.
         let notices: BTreeSet<&str> = entries.iter().filter_map(|(_, e)| e.modified.as_deref()).collect();
@@ -201,12 +215,23 @@ fn build_from(sounds: &BTreeMap<String, SoundEntry>, columns: usize) -> Vec<Cred
     }
 
     push_line(&mut out, "THE ORIGINAL", 11.0, TextColor::Dim, 14.0);
-    push_line(&mut out, "Behaviour derived from Desktop Destroyer by Miroslav Němeček", 12.0, TextColor::White, 0.0);
-    push_line(&mut out, "(breatharian.eu/Petr). This is an independent implementation;", 12.0, TextColor::White, 0.0);
-    push_line(&mut out, "no asset from the original is included.", 12.0, TextColor::White, 0.0);
+    wrapped(
+        &mut out,
+        "Behaviour derived from Desktop Destroyer by Miroslav Němeček (breatharian.eu/Petr). This is an independent implementation; no asset from the original is included.",
+        12.0,
+        TextColor::White,
+        0.0,
+        prose,
+    );
 
-    push_line(&mut out, "Per-file source links are in this app's bundled manifest.json,", 11.0, TextColor::Dim, 14.0);
-    push_line(&mut out, "and in CREDITS.md in the source repository.", 11.0, TextColor::Dim, 0.0);
+    wrapped(
+        &mut out,
+        "Per-file source links are in this app's bundled manifest.json, and in CREDITS.md in the source repository.",
+        11.0,
+        TextColor::Dim,
+        14.0,
+        prose,
+    );
 
     push_line(&mut out, "Press C to close", 11.0, TextColor::Dim, 14.0);
 
@@ -276,6 +301,20 @@ mod tests {
         assert!(joined.iter().any(|t| t.starts_with("CC BY 4.0")));
         assert!(joined.iter().any(|t| t.starts_with("CC0")));
         assert!(joined.iter().any(|t| t.starts_with("Public domain")));
+    }
+
+    #[test]
+    fn every_line_fits_a_phone_width_budget() {
+        // Roughly a phone held upright.
+        let columns = 44;
+        for line in build(columns) {
+            let len = line.text.chars().count();
+            assert!(
+                len <= columns || !line.text.trim().contains(' '),
+                "line {:?} is {len} chars, over the {columns}-column budget",
+                line.text
+            );
+        }
     }
 
     #[test]

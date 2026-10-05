@@ -14,15 +14,15 @@ path = "src/lib.rs"
 [features]
 # The GPU renderer — pipelines, the per-frame draw, HUD text shaping, and the
 # platform-agnostic scene `State`/`GpuLayer`. Off by default so `cargo test` (and the
-# headless CI job) stay exactly as light as before: no wgpu, no cosmic-text. All three
-# binaries (`hakai`, `hakai-win`, `hakai-mac`) turn it on; each still owns its own window,
-# event loop and screen-capture backend.
+# headless CI job) stay exactly as light as before: no wgpu, no cosmic-text. Every
+# front end (`hakai-linux`, `hakai-win`, `hakai-mac`, `hakai-android`) turns it on, through
+# `shell` below.
 render = ["dep:wgpu", "dep:bytemuck", "dep:cosmic-text", "dep:raw-window-handle", "dep:log"]
 # Real audio playback (`hakai_core::playback`): cpal + the 35 bundled WAVs. Every binary
 # turns it on; kept out of the default build so the headless tests stay audio-free.
 playback = ["dep:cpal", "dep:hound", "dep:log"]
 # The shared winit shell (`hakai_core::shell`) — windows, event loop, input — on top of the
-# renderer. hakai-win, hakai-mac and the Linux binary's GNOME/X11 fallback turn it on.
+# renderer. hakai-win, hakai-mac, hakai-android and the Linux binary's GNOME/X11 fallback turn it on.
 shell = ["render", "dep:winit", "dep:pollster"]
 
 [dependencies]

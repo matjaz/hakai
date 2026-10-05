@@ -19,7 +19,7 @@ on Android. See
 | Linux | [Releases](https://github.com/matjaz/hakai/releases) `.deb`, `.rpm` or tarball (x86_64, aarch64), or `makepkg` | Any Wayland or X11 desktop; native overlay on Hyprland, Sway, KDE Plasma, …; Omarchy theme colours |
 | Windows 10/11 | [Releases](https://github.com/matjaz/hakai/releases) `.zip` (x86_64) | Portable, unsigned — SmartScreen shows once |
 | macOS 11+ | [Releases](https://github.com/matjaz/hakai/releases) `.dmg` (universal) | Not notarised — *Open Anyway* once |
-| Android 8+ | [Releases](https://github.com/matjaz/hakai/releases) `.apk` (arm64) | Sideload; landscape; smashes the home screen behind it |
+| Android 8+ | [Releases](https://github.com/matjaz/hakai/releases) `.apk` (arm64) | Sideload; smashes the app or home screen behind it |
 
 ## What it does
 
@@ -170,19 +170,20 @@ cargo run  --release --manifest-path hakai-win/Cargo.toml   # run it
 powershell -File hakai-win/package.ps1                       # build the release zip
 ```
 
-All three binaries build against `wgpu` 30 (the Windows side forced the bump — wgpu 22's D3D12
+All four front ends build against `wgpu` 30 (the Windows side forced the bump — wgpu 22's D3D12
 backend can't present a per-pixel-alpha surface to a plain window, and the
-`DirectComposition` path that can only landed later; Linux and macOS followed). The
+`DirectComposition` path that can only landed later; the others followed). The
 renderer and the whole per-output scene live in `hakai_core::render`, behind the crate's
 off-by-default `render` feature, and the winit shell (windows per monitor, event loop,
-keyboard/pointer routing) in `hakai_core::shell` behind `shell`. Windows and macOS are just
-a `Platform` impl on that shell — their backend, native window styling and screen-capture
-backend (DXGI Desktop Duplication, `CGWindowListCreateImage`); the Linux binary keeps its
+keyboard/pointer/touch routing) in `hakai_core::shell` behind `shell`. Windows, macOS and
+Android are just a `Platform` impl on that shell — their backend, native window styling and,
+on the desktops, screen-capture backend (DXGI Desktop Duplication,
+`CGWindowListCreateImage`); the Linux binary keeps its
 own Wayland event loop for the layer-shell overlay (`zwlr_screencopy_v1` capture) and uses
 the shell for its GNOME/X11 fallback.
 
-See `WINDOWS-PORT.md` (analysis) and `WINDOWS-PLAN.md` (the phased build log) for the full
-story.
+See `WINDOWS-PORT.md` (the analysis), `WINDOWS-PLAN.md` (the phased plan) and
+`WINDOWS-STATUS.md` (what got built, what's verified, what's left) for the full story.
 
 ## macOS
 
@@ -214,7 +215,8 @@ Settings tile (`java/`).
 Phones can't overlay other apps the way a desktop window can, but they don't need to here:
 the activity is **translucent**, so whatever it's launched over — normally the home screen —
 stays visible behind it, and that's what you smash. No special permission. It runs in
-landscape (the HUD and the tool palette need the width), and touch replaces the keyboard:
+either orientation — held upright, the tool palette folds into rows — and touch replaces
+the keyboard:
 
 - drag to use the current tool,
 - tap the status bar for the tool palette, tap a tool to pick it,
@@ -248,7 +250,7 @@ Every platform's release file follows one pattern —
 
 CI builds and packages every platform on each push — Linux `.deb`, `.rpm` and tarball
 (x86_64, aarch64; one build each, wrapped three ways by
-[nfpm](https://nfpm.goreleaser.com)), the Windows zip and the universal macOS DMG — and keeps them as workflow artifacts for two
+[nfpm](https://nfpm.goreleaser.com)), the Windows zip, the universal macOS DMG and the Android APK — and keeps them as workflow artifacts for two
 weeks. Pushing a `v*` tag additionally publishes those same artifacts (plus `SHA256SUMS`)
 as a GitHub release, without rebuilding anything. The tag has to match the crates'
 `version` (`v1.0.0` ↔ `1.0.0` in `hakai-linux`, `hakai-win`, `hakai-mac` and `hakai-android`), or the release
@@ -273,9 +275,9 @@ hakai-android/ the Android library — a translucent NativeActivity on the winit
 hakai-core/    the shared library — headless by default (tiled damage layer, procedural
                decal/icon/sprite generators, all nine tools, termite colony, particles,
                HUD/credits logic); its `render` feature adds the wgpu renderer, HUD text
-               and the per-output scene all three binaries draw with, `shell` the winit
-               window/event-loop/input shell behind Windows, macOS and the Linux
-               fallback, and `playback` the cpal audio engine with all 35 sounds
+               and the per-output scene every front end draws with, `shell` the winit
+               window/event-loop/input shell behind Windows, macOS, Android and
+               the Linux fallback, and `playback` the cpal audio engine with all 35 sounds
 packaging/     PKGBUILD (AUR, -git), .desktop entry, Hyprland keybind snippet
 ```
 
@@ -303,7 +305,10 @@ AUR submission itself on hold until the AUR's own registration lockdown lifts (s
 The Windows build is functional end to end — overlay, all nine tools, audio, brightness
 capture, multi-monitor scaffolding, a portable zip that runs on a clean box. Verified on
 real hardware, though some checks (every tool, multiple monitors) are still pending a
-normal display. See `WINDOWS-PLAN.md` for what's confirmed and what isn't.
+normal display, and none have a recorded re-run since the renderer and window shell moved into
+`hakai-core`. A secondary monitor's impact sounds follow the primary's screen, and a
+monitor plugged in while hakai runs gets no overlay until a restart. See
+`WINDOWS-STATUS.md` for what's confirmed and what isn't.
 
 The macOS build is functional — overlay above the menu bar and Dock, all nine tools,
 audio, a universal DMG — verified on Apple silicon (M3 Pro). Intel and multi-monitor

@@ -11,13 +11,13 @@
         android:theme="@android:style/Theme.Translucent.NoTitleBar.Fullscreen">
 
         <!-- The game: Rust (libhakai.so) on Android's stock NativeActivity. Translucent, so
-             what it was launched over stays visible behind it. Landscape: the HUD and the
-             tool palette need the width. -->
+             what it was launched over stays visible behind it. Either orientation: the HUD
+             re-lays itself out for an upright phone (palette in rows). Rotating is handled
+             in place (configChanges) rather than by restarting the activity. -->
         <activity
             android:name="android.app.NativeActivity"
             android:exported="true"
             android:launchMode="singleTask"
-            android:screenOrientation="sensorLandscape"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden">
             <meta-data android:name="android.app.lib_name" android:value="hakai" />
             <intent-filter>

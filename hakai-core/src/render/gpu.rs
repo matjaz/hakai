@@ -12,6 +12,7 @@
 //! `SurfaceConfiguration.color_space`; `get_current_texture()` returns a
 //! `CurrentSurfaceTexture` enum; `queue.present(frame)` not `frame.present()`.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 use wgpu::util::DeviceExt;
@@ -370,6 +371,9 @@ const CREDITS_SCROLL_MARGIN: f32 = 16.0;
 pub struct HudText {
     /// The status bar's right-hand hint.
     pub status_hint: &'static str,
+    /// The same, shortened — used when the full hint doesn't fit next to the tool name
+    /// (a phone held upright).
+    pub status_hint_short: &'static str,
     /// The credits panel's last line.
     pub credits_close: &'static str,
 }
@@ -377,10 +381,12 @@ pub struct HudText {
 impl HudText {
     pub const KEYBOARD: Self = Self {
         status_hint: "1\u{2013}9 tool \u{b7} \u{2191}\u{2193} palette \u{b7} M mode \u{b7} C credits \u{b7} R clear \u{b7} Esc quit",
+        status_hint_short: "\u{2191}\u{2193} palette \u{b7} C credits \u{b7} Esc quit",
         credits_close: "Press C to close \u{b7} scroll for more",
     };
     pub const TOUCH: Self = Self {
         status_hint: "tap here: tools \u{b7} hold: credits \u{b7} Back: quit",
+        status_hint_short: "tap: tools \u{b7} hold: credits",
         credits_close: "Drag to scroll \u{b7} tap to close",
     };
 }
@@ -392,36 +398,84 @@ const PALETTE_GAP: f32 = 8.0;
 const PALETTE_BOTTOM_MARGIN: f32 = 86.0;
 const PALETTE_ICON_SIZE: f32 = PALETTE_CELL - 12.0;
 const PALETTE_DIGIT_SIZE: f32 = 10.0;
-const PALETTE_NAME_MARGIN: f32 = PALETTE_BOTTOM_MARGIN + PALETTE_CELL + 18.0;
 
-fn palette_total_width() -> f32 {
-    let count = ToolId::ALL.len() as f32;
-    count * PALETTE_CELL + (count - 1.0) * PALETTE_GAP
+/// Kept clear on either side of the status bar and the palette on a narrow screen.
+const HUD_SIDE_MARGIN: f32 = 12.0;
+/// The palette panel's padding around its cells.
+const PALETTE_PANEL_PAD: f32 = 12.0;
+
+/// Where the status bar and the tool palette go on a screen of a given size. A desktop or
+/// a phone in landscape gets the original layout — a 760-point bar, one row of nine
+/// cells; a narrower screen (a phone held upright) gets a bar as wide as it has room for
+/// and the palette in balanced rows (5 + 4, then 3 + 3 + 3). Drawing and hit-testing both
+/// go through this, so they can't disagree.
+#[derive(Clone, Copy, Debug)]
+struct HudLayout {
+    bar_width: f32,
+    cols: usize,
+    rows: usize,
 }
 
-fn palette_start_x(screen_width: f32) -> f32 {
-    (screen_width - palette_total_width()) / 2.0
+fn hud_layout(screen: (f32, f32)) -> HudLayout {
+    let bar_width = HUD_BAR_SIZE.0.min(screen.0 - 2.0 * HUD_SIDE_MARGIN).max(120.0);
+    let n = ToolId::ALL.len();
+    let room = screen.0 - 2.0 * (HUD_SIDE_MARGIN + PALETTE_PANEL_PAD);
+    let fit = (((room + PALETTE_GAP) / (PALETTE_CELL + PALETTE_GAP)).floor() as usize).clamp(1, n);
+    let rows = n.div_ceil(fit);
+    HudLayout { bar_width, cols: n.div_ceil(rows), rows }
 }
 
-fn palette_cell_center(index: usize, screen: (f32, f32)) -> (f32, f32) {
-    let x = palette_start_x(screen.0) + index as f32 * (PALETTE_CELL + PALETTE_GAP) + PALETTE_CELL / 2.0;
-    let y = screen.1 - PALETTE_BOTTOM_MARGIN - PALETTE_CELL / 2.0;
-    (x, y)
+impl HudLayout {
+    /// The bottom row's centre line — where the single row always sat.
+    fn bottom_row_y(&self, screen: (f32, f32)) -> f32 {
+        screen.1 - PALETTE_BOTTOM_MARGIN - PALETTE_CELL / 2.0
+    }
+
+    fn top_row_y(&self, screen: (f32, f32)) -> f32 {
+        self.bottom_row_y(screen) - (self.rows - 1) as f32 * (PALETTE_CELL + PALETTE_GAP)
+    }
+
+    fn cell_center(&self, index: usize, screen: (f32, f32)) -> (f32, f32) {
+        let (row, col) = (index / self.cols, index % self.cols);
+        // A short last row is centred under the full ones.
+        let in_row = (ToolId::ALL.len() - row * self.cols).min(self.cols) as f32;
+        let row_width = in_row * PALETTE_CELL + (in_row - 1.0) * PALETTE_GAP;
+        let x = screen.0 / 2.0 - row_width / 2.0 + col as f32 * (PALETTE_CELL + PALETTE_GAP) + PALETTE_CELL / 2.0;
+        let y = self.top_row_y(screen) + row as f32 * (PALETTE_CELL + PALETTE_GAP);
+        (x, y)
+    }
+
+    fn palette_panel(&self, screen: (f32, f32)) -> ((f32, f32), (f32, f32)) {
+        let (c, r) = (self.cols as f32, self.rows as f32);
+        let size = (
+            c * PALETTE_CELL + (c - 1.0) * PALETTE_GAP + 2.0 * PALETTE_PANEL_PAD,
+            r * PALETTE_CELL + (r - 1.0) * PALETTE_GAP + 2.0 * PALETTE_PANEL_PAD,
+        );
+        let center = (screen.0 / 2.0, (self.top_row_y(screen) + self.bottom_row_y(screen)) / 2.0);
+        (center, size)
+    }
+
+    /// The tool-name label just above the palette.
+    fn palette_name_y(&self, screen: (f32, f32)) -> f32 {
+        self.top_row_y(screen) - PALETTE_CELL / 2.0 - 18.0
+    }
 }
 
 /// Whether `point` (points) is on the status bar — the touch platforms' handle for opening
 /// the palette, since there's no ↑ key to press.
 pub fn hud_bar_at(point: (f32, f32), screen: (f32, f32)) -> bool {
     let center = (screen.0 / 2.0, screen.1 - HUD_BAR_BOTTOM_MARGIN);
-    (point.0 - center.0).abs() <= HUD_BAR_SIZE.0 / 2.0 && (point.1 - center.1).abs() <= HUD_BAR_SIZE.1 / 2.0 + 8.0
+    let bar_width = hud_layout(screen).bar_width;
+    (point.0 - center.0).abs() <= bar_width / 2.0 && (point.1 - center.1).abs() <= HUD_BAR_SIZE.1 / 2.0 + 8.0
 }
 
 /// The tool under `point`, or `None` — the palette's hit-test. Half-gap margin so a click
 /// between two cells still lands one of them.
 pub fn palette_tool_at(point: (f32, f32), screen: (f32, f32)) -> Option<ToolId> {
     let half = PALETTE_CELL / 2.0 + PALETTE_GAP / 2.0;
+    let layout = hud_layout(screen);
     for (i, id) in ToolId::ALL.into_iter().enumerate() {
-        let (cx, cy) = palette_cell_center(i, screen);
+        let (cx, cy) = layout.cell_center(i, screen);
         if (point.0 - cx).abs() <= half && (point.1 - cy).abs() <= half {
             return Some(id);
         }
@@ -540,8 +594,8 @@ fn build_credits_pixmap(
     close_line: &str,
 ) -> tiny_skia::Pixmap {
     let char_width = measure_char_width(text, CREDITS_BODY_SIZE);
-    let max_width = 960.0_f32.min(screen_width - 120.0);
-    let columns = (((max_width - CREDITS_PADDING * 2.0) / char_width).floor() as i64).max(40) as usize;
+    let max_width = 960.0_f32.min(screen_width - 2.0 * HUD_SIDE_MARGIN);
+    let columns = (((max_width - CREDITS_PADDING * 2.0) / char_width).floor() as i64).max(24) as usize;
 
     let mut lines = crate::credits::build(columns);
     // The last line says how to close the panel — in this platform's terms.
@@ -820,10 +874,13 @@ pub struct Assets {
     sliver_textures: Vec<(wgpu::Texture, wgpu::TextureView)>,
     flash_texture: (wgpu::Texture, wgpu::TextureView),
 
-    hud_panel: HudGpu,
     hud_hint: Option<HudGpu>,
+    hud_hint_short: Option<HudGpu>,
     hud_label: Option<HudGpu>,
-    palette_panel: (wgpu::Texture, wgpu::TextureView, f32, f32),
+    /// The status bar's and the palette's backgrounds, built on first use at each size a
+    /// layout asks for (see `HudLayout`) — rotating a phone or plugging in a narrower
+    /// monitor just adds one more. Keyed by (width, height, is_palette).
+    panels: RefCell<HashMap<(u32, u32, bool), (wgpu::Texture, wgpu::TextureView)>>,
     palette_cell_normal: (wgpu::Texture, wgpu::TextureView),
     palette_cell_selected: (wgpu::Texture, wgpu::TextureView),
     palette_icons: HashMap<ToolId, (wgpu::Texture, wgpu::TextureView)>,
@@ -895,25 +952,11 @@ impl Assets {
             .collect();
         let flash_texture = create_sprite_texture(&device, &queue, sprites.flash());
 
-        let hud_panel_pixmap = build_panel_pixmap(
-            HUD_BAR_SIZE.0 as u32,
-            HUD_BAR_SIZE.1 as u32,
-            hud_rgba(hud_colors.background, 158),
-            Some((hud_rgba(hud_colors.foreground, 56), 1.0)),
-        );
-        let hud_panel = create_hud_gpu(&device, &queue, &pipelines.tile_bind_group_layout, &sampler, &hud_panel_pixmap, String::new());
-        let hud_hint = create_hud_text(&device, &queue, &pipelines.tile_bind_group_layout, &sampler, text, hud_text.status_hint, HUD_HINT_SIZE, false, hud_rgba_arr(hud_colors.foreground, 153));
+        let hint_color = hud_rgba_arr(hud_colors.foreground, 153);
+        let hud_hint = create_hud_text(&device, &queue, &pipelines.tile_bind_group_layout, &sampler, text, hud_text.status_hint, HUD_HINT_SIZE, false, hint_color);
+        let hud_hint_short = create_hud_text(&device, &queue, &pipelines.tile_bind_group_layout, &sampler, text, hud_text.status_hint_short, HUD_HINT_SIZE, false, hint_color);
         let initial_label = format!("{} \u{b7} {}", ToolId::Hammer.key_digit(), ToolId::Hammer.display_name());
         let hud_label = create_hud_text(&device, &queue, &pipelines.tile_bind_group_layout, &sampler, text, &initial_label, HUD_LABEL_SIZE, false, hud_rgba_arr(hud_colors.foreground, 255));
-
-        let palette_panel_pixmap = build_panel_pixmap(
-            (palette_total_width() + 24.0) as u32,
-            (PALETTE_CELL + 24.0) as u32,
-            hud_rgba(hud_colors.background, 168),
-            Some((hud_rgba(hud_colors.foreground, 56), 1.0)),
-        );
-        let (ppt, ppv) = create_sprite_texture(&device, &queue, &palette_panel_pixmap);
-        let palette_panel = (ppt, ppv, palette_panel_pixmap.width() as f32, palette_panel_pixmap.height() as f32);
 
         let cell_normal_pixmap = build_panel_pixmap(PALETTE_CELL as u32, PALETTE_CELL as u32, hud_rgba(hud_colors.foreground, 18), None);
         let palette_cell_normal = create_sprite_texture(&device, &queue, &cell_normal_pixmap);
@@ -955,10 +998,10 @@ impl Assets {
             flame_textures,
             sliver_textures,
             flash_texture,
-            hud_panel,
             hud_hint,
+            hud_hint_short,
             hud_label,
-            palette_panel,
+            panels: RefCell::new(HashMap::new()),
             palette_cell_normal,
             palette_cell_selected,
             palette_icons,
@@ -986,6 +1029,23 @@ impl Assets {
     }
 
     /// (Re)builds a `GpuLayer`'s damage layer and its GPU tiles at the given point size.
+    /// The status bar's (`palette: false`) or the palette's background at `size`.
+    fn panel_view(&self, size: (f32, f32), palette: bool) -> wgpu::TextureView {
+        let key = (size.0.round().max(1.0) as u32, size.1.round().max(1.0) as u32, palette);
+        if let Some((_, view)) = self.panels.borrow().get(&key) {
+            return view.clone();
+        }
+        let pixmap = build_panel_pixmap(
+            key.0,
+            key.1,
+            hud_rgba(self.hud_colors.background, if palette { 168 } else { 158 }),
+            Some((hud_rgba(self.hud_colors.foreground, 56), 1.0)),
+        );
+        let (texture, view) = create_sprite_texture(&self.device, &self.queue, &pixmap);
+        self.panels.borrow_mut().insert(key, (texture, view.clone()));
+        view
+    }
+
     /// How far the credits panel can scroll on a screen `screen_height` points tall — 0 when
     /// it fits (with a margin above and below).
     pub fn credits_scroll_max(&self, screen_height: f32) -> f32 {
@@ -1143,15 +1203,24 @@ pub fn render(a: &Assets, text: &mut TextRenderer, icons: &mut ToolIcons, show_c
             }
         }
 
-        pass.set_pipeline(pipeline);
+        let layout = hud_layout(screen_px);
         let bar_center = (screen_px.0 / 2.0, screen_px.1 - HUD_BAR_BOTTOM_MARGIN);
-        draw_hud_element(queue, &mut pass, &a.hud_panel, bar_center, (0.5, 0.5), screen_px);
+        pass.set_pipeline(sprite_pipeline);
+        let bar_view = a.panel_view((layout.bar_width, HUD_BAR_SIZE.1), false);
+        let ndc = rotated_sprite_ndc(bar_center, (layout.bar_width, HUD_BAR_SIZE.1), 0.0, screen_px, 1.0);
+        draw_rotated_sprite(device, &mut pass, sprite_bind_group_layout, sampler, &bar_view, &ndc, "hud-bar");
+
+        pass.set_pipeline(pipeline);
+        let label_width = a.hud_label.as_ref().map_or(0.0, |l| l.width as f32);
         if let Some(label) = &a.hud_label {
-            let anchor = (bar_center.0 - HUD_BAR_SIZE.0 / 2.0 + HUD_BAR_PADDING, bar_center.1);
+            let anchor = (bar_center.0 - layout.bar_width / 2.0 + HUD_BAR_PADDING, bar_center.1);
             draw_hud_element(queue, &mut pass, label, anchor, (0.0, 0.5), screen_px);
         }
-        if let Some(hint) = &a.hud_hint {
-            let anchor = (bar_center.0 + HUD_BAR_SIZE.0 / 2.0 - HUD_BAR_PADDING, bar_center.1);
+        // The full hint if it fits beside the tool name, else the short one, else none.
+        let room = layout.bar_width - 2.0 * HUD_BAR_PADDING - label_width - 16.0;
+        let hint = [&a.hud_hint, &a.hud_hint_short].into_iter().flatten().find(|h| h.width as f32 <= room);
+        if let Some(hint) = hint {
+            let anchor = (bar_center.0 + layout.bar_width / 2.0 - HUD_BAR_PADDING, bar_center.1);
             draw_hud_element(queue, &mut pass, hint, anchor, (1.0, 0.5), screen_px);
         }
 
@@ -1171,13 +1240,13 @@ pub fn render(a: &Assets, text: &mut TextRenderer, icons: &mut ToolIcons, show_c
         let palette_alpha = gpu.hud.palette_alpha();
         if palette_alpha > 0.0 {
             pass.set_pipeline(sprite_pipeline);
-            let (_, view, pw, ph) = &a.palette_panel;
-            let center = (screen_px.0 / 2.0, screen_px.1 - PALETTE_BOTTOM_MARGIN - PALETTE_CELL / 2.0);
-            let ndc = rotated_sprite_ndc(center, (*pw, *ph), 0.0, screen_px, palette_alpha);
-            draw_rotated_sprite(device, &mut pass, sprite_bind_group_layout, sampler, view, &ndc, "palette-panel");
+            let (center, size) = layout.palette_panel(screen_px);
+            let view = a.panel_view(size, true);
+            let ndc = rotated_sprite_ndc(center, size, 0.0, screen_px, palette_alpha);
+            draw_rotated_sprite(device, &mut pass, sprite_bind_group_layout, sampler, &view, &ndc, "palette-panel");
 
             for (i, id) in ToolId::ALL.into_iter().enumerate() {
-                let center = palette_cell_center(i, screen_px);
+                let center = layout.cell_center(i, screen_px);
                 let cell_bg = if id == gpu.active_tool { &a.palette_cell_selected } else { &a.palette_cell_normal };
                 let ndc = rotated_sprite_ndc(center, (PALETTE_CELL, PALETTE_CELL), 0.0, screen_px, palette_alpha);
                 draw_rotated_sprite(device, &mut pass, sprite_bind_group_layout, sampler, &cell_bg.1, &ndc, "palette-cell");
@@ -1194,7 +1263,7 @@ pub fn render(a: &Assets, text: &mut TextRenderer, icons: &mut ToolIcons, show_c
                 }
             }
             if let Some(label) = &a.hud_label {
-                let center = (screen_px.0 / 2.0, screen_px.1 - PALETTE_NAME_MARGIN);
+                let center = (screen_px.0 / 2.0, layout.palette_name_y(screen_px));
                 let ndc = rotated_sprite_ndc(center, (label.width as f32, label.height as f32), 0.0, screen_px, palette_alpha);
                 draw_rotated_sprite(device, &mut pass, sprite_bind_group_layout, sampler, &label.view, &ndc, "palette-name");
             }
