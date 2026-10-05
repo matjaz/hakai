@@ -13,7 +13,8 @@
 #
 # Signing: with ANDROID_KEYSTORE (+ ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS) the APK
 # is signed with that key — keep it, Android only installs updates signed by the same
-# key. Without it cargo-apk signs with the local debug key, fine for testing.
+# key. Without it cargo-apk signs with the local debug key, fine for testing. Making the
+# release key and handing it to CI: hakai-android/SIGNING.md.
 
 set -euo pipefail
 

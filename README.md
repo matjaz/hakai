@@ -229,6 +229,9 @@ rustup target add aarch64-linux-android && cargo install cargo-apk
 hakai-android/package.sh                     # → hakai-android/target/hakai-<ver>-android-arm64.apk
 ```
 
+Releases are signed with one long-lived key so each APK installs over the last —
+[`hakai-android/SIGNING.md`](hakai-android/SIGNING.md) covers making it and giving it to CI.
+
 ## Releases
 
 Every platform's release file follows one pattern —
