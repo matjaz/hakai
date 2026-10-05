@@ -1,8 +1,24 @@
 # Hakai on Windows
 
-Companion to `OMARCHY-PORT.md`. That document planned the move off macOS; this one plans
-the move off Wayland, and it is a much smaller document because the expensive half of the
-work is already done and already shipping.
+Companion to `OMARCHY-PORT.md` (in the desktop-destroyer repo). That document planned the
+move off macOS; this one plans the move off Wayland, and it is a much smaller document
+because the expensive half of the work is already done and already shipping.
+
+> **Status: the port is done and shipping** — see `WINDOWS-STATUS.md` for what was built
+> and what is still unverified. This is the analysis as written beforehand: its line
+> counts, paths and version numbers describe the tree of that moment, not today's. The
+> things that turned out differently:
+>
+> * The Wayland crate `hakai/` is now `hakai-linux/`.
+> * `wgpu` 22 could not do it. Route 1 as described (a plain HWND swapchain) only offers
+>   an opaque surface; the shipped overlay uses wgpu 30's `DxgiFromVisual` presentation —
+>   DirectComposition, i.e. route 2's mechanism, but provided by wgpu rather than by
+>   hand-carried DXGI interop. Every binary is on wgpu 30 now.
+> * The sharing went further than the Structure section proposes: besides the renderer,
+>   the winit shell and the audio engine are in `hakai-core` too (`shell`, `playback`
+>   features), and macOS and Android builds were added on top of the same shell.
+> * Two non-goals moved: the README lists Windows 10 as supported (still untested there),
+>   and CI runs a full `windows-latest` build on every push rather than only on tags.
 
 ## What this port actually is
 
@@ -192,7 +208,8 @@ The awkwardness is the ~1,600 lines the two binaries would share — wgpu pipeli
 
 **Done** (Phase 7, PRs #2–#4): the duplicate-first shortcut was taken to ship the port,
 then the second option was carried out — `hakai_core::render` now owns the renderer,
-`Scene` / `GpuLayer`, HUD text and `HudColors`; `audio.rs` alone stayed `#[path]`-included.
+`Scene` / `GpuLayer`, HUD text and `HudColors`. The winit shell and `audio.rs` followed
+later, as `hakai_core::shell` and `hakai_core::playback`.
 
 Prefer the second. It shrinks `hakai-win` to roughly the size of the problem it actually
 represents.
