@@ -12,7 +12,7 @@ wander off on its own (termites) or wipe it clean again (the washer).
 | Linux | `.deb`, `.rpm`, or tarball — [install notes](hakai-linux/README.md) |
 | Windows 10/11 | portable `.zip` — [notes](hakai-win/README.txt) |
 | macOS 11+ | universal `.dmg` — [notes](hakai-mac/README.txt) |
-| Android 8+ | `.apk` — [notes](hakai-android/README.md) |
+| Android 8+ | `.apk` — sideload; smashes the app or home screen behind it — [notes](hakai-android/README.md) |
 
 Hakai is Japanese for *destruction*. It's a reimplementation of
 [Desktop Destroyer](http://www.breatharian.eu/Petr/en/program/misc.htm) by Miroslav
@@ -40,7 +40,7 @@ work. Nine tools, each a faithful port of the original's own behaviour:
 `Tab` / `Shift+Tab` cycles tools, `↑`/`↓` opens and closes the tool palette, `M` freezes
 the view to a snapshot (so the *real* desktop underneath can keep changing without
 disturbing what you're smashing), `C` opens the credits panel, `R` clears everything.
-On Android, touch replaces the keyboard — see [hakai-android](hakai-android/README.md).
+On Android, touch replaces the keyboard and it runs in either orientation — see [hakai-android](hakai-android/README.md).
 
 The impact sound follows the brightness of whatever's under the cursor: hollow on dark,
 glassy on light, like the original. Where the screen can't be read, a random variant is

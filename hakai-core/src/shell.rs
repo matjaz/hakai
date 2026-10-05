@@ -315,7 +315,10 @@ impl<P: Platform> App<P> {
         let mut icons = ToolIcons::new();
         let mut sprites = SpriteFactory::new();
         let mut text = TextRenderer::new();
-        let w0_points = logical_size(&self.windows[0]).0 as f32;
+        // The credits panel is built once; sizing it for the narrower side means it still
+        // fits across when a phone is turned upright (it scrolls vertically anyway).
+        let (w0, h0) = logical_size(&self.windows[0]);
+        let w0_points = w0.min(h0) as f32;
         let assets = Assets::build(
             device,
             queue,

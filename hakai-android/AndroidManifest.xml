@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- versionCode/versionName and min/targetSdk come from package.sh (aapt2 link flags). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="si.intera.hakai">
+
+    <application
+        android:label="Hakai"
+        android:icon="@mipmap/ic_launcher"
+        android:hasCode="true"
+        android:extractNativeLibs="true"
+        android:theme="@android:style/Theme.Translucent.NoTitleBar.Fullscreen">
+
+        <!-- The game: Rust (libhakai.so) on Android's stock NativeActivity. Translucent, so
+             what it was launched over stays visible behind it. Either orientation: the HUD
+             re-lays itself out for an upright phone (palette in rows). Rotating is handled
+             in place (configChanges) rather than by restarting the activity. -->
+        <activity
+            android:name="android.app.NativeActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden">
+            <meta-data android:name="android.app.lib_name" android:value="hakai" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- The Quick Settings tile: starts hakai over whatever app is open. -->
+        <service
+            android:name=".HakaiTileService"
+            android:exported="true"
+            android:label="Hakai"
+            android:icon="@drawable/ic_tile"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>

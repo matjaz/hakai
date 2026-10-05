@@ -26,11 +26,12 @@ Off by default, so `cargo test` stays light:
 | `playback` | cpal audio engine and the 35 bundled sounds |
 | `shell` | winit window, event loop, and input (implies `render`) |
 
-Windows, macOS, and the Linux GNOME/X11 fallback are a `Platform` impl on `shell`. The
-Linux binary keeps its own Wayland event loop for the layer-shell overlay and uses
-`shell` for the fallback. All three binaries build against wgpu 30: the Windows side
-needed 27+ so a per-pixel-alpha surface can present through DirectComposition, and Linux
-and macOS followed. The renderer lives in `hakai_core::render`.
+Windows, macOS, and Android are a `Platform` impl on `shell` — keyboard, pointer, and
+touch — plus, on the desktops, a screen-capture backend. The Linux binary keeps its own
+Wayland event loop for the layer-shell overlay and uses `shell` for the GNOME/X11
+fallback. All four front ends build against wgpu 30: the Windows side needed 27+ so a
+per-pixel-alpha surface can present through DirectComposition, and the others followed.
+The renderer lives in `hakai_core::render`.
 
 Not a formal Cargo workspace, deliberately. Each binary depends on this crate via a
 plain relative path. Each platform crate has its own `PHASE*.md` walkthrough;

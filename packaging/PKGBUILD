@@ -1,12 +1,11 @@
-# DRAFT — not yet submitted to the AUR. `url`/`source` now point at the real repo; still
-# untested end to end with `makepkg` (needs that remote to actually have this content
-# pushed to it — see PHASE8.md for what's still open). See `OMARCHY-PORT.md`'s Phase 8
-# writeup and `PHASE8.md` (repo root) for the full context.
+# Not yet submitted to the AUR (registration there is locked down — see PHASE8.md), but
+# confirmed working end to end with `makepkg -si` against the public repo. See
+# `PHASE8.md` (repo root) for the full context and what's still open.
 #
-# `-git`, not a release-tag package: there's no tagged release yet, and this project is
-# still under active development — a VCS package is the right shape until that changes,
-# same as most actively-developed Hyprland-ecosystem AUR packages (hyprland-git and
-# friends).
+# `-git`, not a release-tag package: this was written before the first tagged release and
+# tracks `main`, same as most actively-developed Hyprland-ecosystem AUR packages
+# (hyprland-git and friends). Tagged releases exist now (v1.0.0 onward), so a release-tag
+# package is possible; it hasn't been written.
 
 pkgname=hakai-git
 pkgver=0.0.1.r22.gb811584  # placeholder — pkgver() below recomputes this from git at build time
@@ -24,7 +23,7 @@ depends=(
   'libxkbcommon'      # keyboard layout handling, via smithay-client-toolkit
   'vulkan-icd-loader' # wgpu's Vulkan backend — an actual driver (mesa-vulkan-*, matching your GPU) also has to be installed, but which one is hardware-specific, not something this package can pin
   'alsa-lib'          # cpal's Linux backend links against libasound; Omarchy's own PipeWire + pipewire-alsa already routes this through PipeWire, so no direct PipeWire dependency is needed here
-  'hyprland'          # this is a wlr-layer-shell overlay relying on Hyprland-specific exclusive-keyboard-grab behavior — see OMARCHY-PORT.md's explicit non-goals (other compositors are out of scope)
+  'hyprland'          # the compositor the layer-shell overlay is built and tested on. No longer strictly required — hakai now also runs on other layer-shell compositors and, through its winit fallback, on GNOME and X11 (see README.md) — but this package still targets Omarchy/Hyprland
 )
 optdepends=(
   'omarchy: theme-aware paint palette and HUD colours (falls back to a built-in palette cleanly without it — see hakai-linux/PHASE7.md)'

@@ -84,8 +84,8 @@ hakai-core renderer: DirectComposition, cpal/WASAPI audio, and DXGI Desktop
 Duplication for the brightness-driven impact sound. There is no system theme to
 read, so the color-thrower and HUD use the built-in palette.
 
-The analysis and the phased build log live in the repository as WINDOWS-PORT.md
-and WINDOWS-PLAN.md.
+The analysis, the phased plan, and the verification log live in the repository as
+WINDOWS-PORT.md, WINDOWS-PLAN.md, and WINDOWS-STATUS.md.
 
 
 Status
@@ -94,7 +94,10 @@ Status
 Functional end to end — overlay, all nine tools, audio, brightness capture,
 multi-monitor scaffolding, a portable zip that runs on a clean box. Verified on
 real hardware, though some checks (every tool, multiple monitors) are still
-pending a normal display. WINDOWS-PLAN.md records what is confirmed.
+pending a normal display, and none have a recorded re-run since the renderer and
+window shell moved into hakai-core. A secondary monitor's impact sounds follow
+the primary's screen, and a monitor plugged in while hakai runs gets no overlay
+until a restart. WINDOWS-STATUS.md records what is confirmed.
 
 
 Releases

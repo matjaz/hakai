@@ -6,6 +6,21 @@ command to run and the fact that has to be true before moving on.
 
 Written to be followed at a Windows machine with nothing installed on it.
 
+> **Status: carried out.** Phases 0–7 are done and the Windows build has shipped in every
+> release since v1.0.0. The text below is the plan as written, kept as the record of the
+> reasoning — it is not a description of today's tree. Where the two differ:
+>
+> | The plan says | The tree has |
+> |---|---|
+> | `hakai/` — the Wayland binary's crate | `hakai-linux/` (the command is still `hakai`) |
+> | Phase 0 "Route 1": a plain-HWND `wgpu` 22 swapchain | wgpu 30 with `Dx12SwapchainKind::DxgiFromVisual` + `WS_EX_NOREDIRECTIONBITMAP` — a DirectComposition path, but one wgpu provides, with no hand-written DXGI interop |
+> | `hakai-win` owning its window, event loop and key `match` (Phase 2) | all of that in `hakai_core::shell`, shared with macOS, Android and the Linux GNOME/X11 fallback; `hakai-win` is a `Platform` impl on it |
+> | `audio.rs` / `text.rs` `#[path]`-included from `hakai/src` | `hakai_core::playback` and `hakai_core::render::text` |
+> | Assets in `hakai/assets/`, to be shipped beside the binary (Phase 6) | `hakai-core/assets/`, `include_bytes!`'d — the zip holds `hakai.exe`, `LICENSE` and `CREDITS.md` |
+> | A `windows-latest` CI job to add | In `.github/workflows/ci.yml`; it also builds the zip, and `v*` tags publish it |
+>
+> What's confirmed, what isn't, and what's still unbuilt is in `WINDOWS-STATUS.md`.
+
 **The shape of the work:** ~80% of the codebase (`hakai-core`, the wgpu draw code,
 `audio.rs`, `text.rs`) is already cross-platform and needs no edits. What gets written is a
 new binary crate holding a window, an event loop and a screen-capture backend. Estimated
@@ -358,9 +373,18 @@ near-verbatim, and `hakai`'s inline version was deleted rather than reconciled.
 from ~2,980 to ~900. All three CI jobs green, including the Linux `hakai` build — the check
 that the lift was a move, not a rewrite. `hakai` verified running on Hyprland.
 
+**Since then** the same move was made twice more: the winit shell (windows per monitor,
+event loop, keyboard/pointer routing) went into `hakai_core::shell` behind a `shell`
+feature, and `audio.rs` into `hakai_core::playback` behind `playback` — so the `#[path]`
+include is gone too. `hakai-win/src` is now ~530 lines (`main.rs` 97), and the crate that
+was `hakai` is `hakai-linux`.
+
 ---
 
-## CI
+## CI — ✅ done
+
+The `hakai-win` job in `.github/workflows/ci.yml` does this and also runs
+`hakai-win/package.ps1`, uploading the zip as an artifact. As planned:
 
 Add a `windows-latest` job running
 `cargo test --manifest-path hakai-core/Cargo.toml --locked` and
@@ -389,6 +413,9 @@ window, so there is always a way out even before Esc.
 ---
 
 ## Definition of done
+
+All of this is built; most of it has not been confirmed on a normal Windows desktop since
+the code was lifted into `hakai-core`. `WINDOWS-STATUS.md` has the item-by-item checklist.
 
 * All nine tools work with mouse and keyboard, on multiple monitors at mixed DPI.
 * Impact sounds follow the brightness of the surface underneath.

@@ -425,7 +425,31 @@ Not yet build-tested — first run since adding the profile setting.
 ---
 
 Still open for Phase 8: confirming the launcher shows "Hakai" correctly after the
-`GenericName` fix, confirming the stripped binary builds clean and still runs, a headless
-compositor smoke-test setup for CI (deferred, see chunk 5), and the actual AUR submission
-(blocked externally — AUR registration is currently locked down after mid-2026's
-malicious-package wave, unrelated to this project).
+`GenericName` fix, a `makepkg` run confirming the `$srcdir` warning is gone now the binary
+is stripped, a headless compositor smoke-test setup for CI (deferred, see chunk 5), and the
+actual AUR submission (blocked externally — AUR registration is currently locked down
+after mid-2026's malicious-package wave, unrelated to this project).
+
+---
+
+# Since Phase 8
+
+This file is the log of the original Arch packaging work, written when the repo held two
+crates (`hakai-core` and `hakai`) and one platform. What has changed around it since:
+
+- **The Linux crate is `hakai-linux/`** (the command is still `hakai`), so the
+  `hakai/Cargo.toml` / `hakai/src/main.rs` paths above are now `hakai-linux/…`. The
+  `/mnt/mac/…` paths are the original dev box's mount, not anything in the repo.
+- **CI grew from the two jobs of chunk 5 to five build jobs plus a release job**:
+  `hakai-core`, `hakai-linux` (x86_64 and aarch64, on Ubuntu 22.04), `hakai-win`,
+  `hakai-mac`, `hakai-android`. Each packages its platform's artifact; a `v*` tag publishes
+  them all as a GitHub release. Still build-only — nothing launches a binary.
+- **There are tagged releases now** (v1.0.0 onward), and Linux ships as a tarball, `.deb`
+  and `.rpm` built by `hakai-linux/package.sh` with nfpm, besides the `PKGBUILD`. Those
+  are built from the stripped release binary of chunk 7, so it does build clean.
+- **`hakai` is no longer Hyprland-only**: the layer-shell overlay runs on other
+  wlroots-style compositors, KDE Plasma 6 and COSMIC, and a winit fallback covers GNOME
+  and X11. `packaging/PKGBUILD` still declares a hard `hyprland` dependency from before
+  that — worth revisiting before the AUR submission.
+- **`packaging/PKGBUILD` is still the `-git` package** of chunk 2. A release-tag package
+  is possible now but hasn't been written.
