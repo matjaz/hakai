@@ -2,11 +2,13 @@
 //!
 //! The window/event-loop/input shell is `hakai_core::shell`, shared with the Windows and
 //! macOS builds and the Linux GNOME/X11 fallback; this is the Android hooks into it, run
-//! from android-activity's NativeActivity glue (no Java code of our own).
+//! from android-activity's NativeActivity glue. The only Java is the Quick Settings tile
+//! (`java/`), which starts this same activity over whatever app is open.
 //!
 //! **The screen it smashes is the real one.** The activity uses a translucent theme, so
-//! whatever it was launched over — the home screen, usually — stays visible behind it,
-//! the phone equivalent of the desktop overlay, with no special permission. NativeActivity
+//! whatever it was launched over — the home screen, or with the tile any app — stays
+//! visible behind it, the phone equivalent of the desktop overlay, with no special
+//! permission. NativeActivity
 //! forces its window to opaque RGB_565 on creation; [`make_window_translucent`] switches
 //! it back to `PixelFormat.TRANSLUCENT` on the UI thread.
 //!

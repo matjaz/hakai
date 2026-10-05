@@ -147,8 +147,8 @@ jobs:
           retention-days: 14
 
   # hakai-android (an arm64 APK). Build-only like the rest. GitHub's Ubuntu runners ship
-  # the Android SDK, an NDK and JDK 17; this adds the API 35 platform (the newest an NDK
-  # r27–r29 accepts) and cargo-apk.
+  # the Android SDK, an NDK and JDK 17 — everything package.sh assembles the APK with; this
+  # only adds the API 35 platform (the newest an NDK r27–r29 accepts).
   #
   # Signing: with the ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD secrets set, the
   # APK is signed with that release key — required for users to install one release over
@@ -168,10 +168,8 @@ jobs:
             hakai-android
             hakai-core
 
-      - name: Install cargo-apk and the API 35 platform
-        run: |
-          cargo install --locked cargo-apk
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" >/dev/null
+      - name: Install the API 35 platform
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" >/dev/null'
 
       - name: Build + package (hakai-android/package.sh → APK)
         env:

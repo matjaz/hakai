@@ -34,30 +34,5 @@ winit = { version = "0.30", features = ["android-native-activity"] }
 android-activity = "0.6"
 jni = "0.22"
 
-# --- cargo-apk: the APK's manifest -------------------------------------------------------
-[package.metadata.android]
-package = "si.intera.hakai"
-apk_name = "hakai"
-build_targets = ["aarch64-linux-android"]
-# Shipped as hakai-core's procedural app icon (see package.sh).
-resources = "res"
-
-[package.metadata.android.sdk]
-# AAudio (cpal's Android backend) needs 26.
-min_sdk_version = 26
-target_sdk_version = 35
-
-[package.metadata.android.application]
-label = "Hakai"
-icon = "@mipmap/ic_launcher"
-# Translucent: whatever's underneath — the home screen hakai was launched from — stays
-# visible, so hakai smashes the real screen rather than a picture of it, with no special
-# permission. NoTitleBar.Fullscreen hides the status bar too.
-theme = "@android:style/Theme.Translucent.NoTitleBar.Fullscreen"
-
-[package.metadata.android.application.activity]
-# The HUD and the tool palette are laid out for ≥ 800 points of width — landscape on a
-# phone.
-orientation = "sensorLandscape"
-config_changes = "orientation|screenSize|screenLayout|keyboardHidden"
-launch_mode = "singleTask"
+# The APK itself — manifest, Java tile service, icons, signing — is assembled by
+# package.sh from AndroidManifest.xml, java/ and res-static/.
