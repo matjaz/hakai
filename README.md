@@ -49,7 +49,11 @@ glassy on light), like the original — each platform reads the screen its own w
 (`wlr-screencopy`, DXGI Desktop Duplication, CoreGraphics), and falls back to a random
 variant where it can't.
 
-![Hakai mid-rampage — cracks, bullet holes, scorch marks, paint splats, stamps and termites over a desktop background, with the status bar and tool palette visible](assets/hakai.jpg)
+| Hammer | Flame-thrower |
+| --- | --- |
+| ![Hammer cracks across the desktop. The status bar shows tool 1.](assets/screenshots/hammer.jpg) | ![The flame-thrower leaves standing fires that burn down into scorch marks.](assets/screenshots/flames.jpg) |
+| **Paint, bullets, and stamps** | **Tool palette and termites** |
+| ![Bullet holes, paint splats, and rubber stamps (REJECTED, TOP SECRET, VOID).](assets/screenshots/paint.jpg) | ![The tool palette open over saw cuts, paint, stamps, and a termite colony.](assets/screenshots/palette.jpg) |
 
 ## Installing
 
