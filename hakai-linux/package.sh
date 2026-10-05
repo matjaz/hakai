@@ -8,7 +8,7 @@
 #
 #   hakai-linux/target/hakai-<version>-linux-<arch>.tar.gz — the stripped binary (fonts and all
 #       35 sounds are compiled in), hakai.desktop + a 256 px icon, the Hyprland keybind
-#       example, README.md, LICENSE and CREDITS.md
+#       example, README.md, LINUX.md, LICENSE and CREDITS.md
 #   hakai-linux/target/hakai_<version>-1_<amd64|arm64>.deb  — Debian, Ubuntu, Mint, …
 #   hakai-linux/target/hakai-<version>-1.<x86_64|aarch64>.rpm — Fedora, openSUSE, …
 #
@@ -49,6 +49,7 @@ cargo run --release --locked --manifest-path "$MANIFEST" --target-dir "$TARGET_D
 cp "$TARGET_DIR/release/hakai" "$STAGE/"
 cp packaging/hakai.desktop packaging/hyprland-bindings.conf.example "$STAGE/"
 cp README.md LICENSE CREDITS.md "$STAGE/"
+cp hakai-linux/README.md "$STAGE/LINUX.md"
 
 tar -C "$TARGET_DIR" -czf "$TARBALL" "$NAME"
 echo "-> $TARBALL  ($(du -h "$TARBALL" | cut -f1))"
@@ -89,6 +90,8 @@ contents:
     dst: /usr/share/icons/hicolor/256x256/apps/hakai.png
   - src: $STAGE/README.md
     dst: /usr/share/doc/hakai/README.md
+  - src: $STAGE/LINUX.md
+    dst: /usr/share/doc/hakai/LINUX.md
   - src: $STAGE/CREDITS.md
     dst: /usr/share/doc/hakai/CREDITS.md
   - src: $STAGE/hyprland-bindings.conf.example

@@ -71,6 +71,41 @@ Notes
   HAKAI_NO_CAPTURE=1 skips the screen capture (and its permission prompt).
 
 
+Building
+--------
+
+From a checkout of the source repository:
+
+    cargo run --release --manifest-path hakai-mac/Cargo.toml
+    hakai-mac/package.sh
+
+package.sh builds a universal binary (Apple silicon + Intel) and writes
+hakai-mac/target/hakai-<version>-macos-universal.dmg. Ad-hoc signed by default.
+Set SIGN_IDENTITY to a Developer ID and NOTARY_PROFILE to a keychain profile to
+sign, notarise, and staple instead — see the header of package.sh.
+
+Metal draws into a non-opaque CAMetalLayer. The overlay is lifted to the
+screensaver window level so it covers the menu bar and the Dock, on every Space
+and every display. The brightness-driven impact sound reads the screen with
+CGWindowListCreateImage, excluding the overlay itself.
+
+
+Status
+------
+
+Functional — overlay above the menu bar and Dock, all nine tools, audio, a
+universal DMG — verified on Apple silicon (M3 Pro). Intel and multi-monitor
+setups are built but not yet tried on real hardware.
+
+
+Releases
+--------
+
+CI builds the universal DMG on each push. A v* tag that matches this crate's
+version (and the same version in hakai-linux, hakai-win, and hakai-android)
+publishes it. See .github/workflows/ci.yml.
+
+
 License
 -------
 
