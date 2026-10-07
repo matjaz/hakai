@@ -7,7 +7,7 @@
 	<key>CFBundleExecutable</key>
 	<string>hakai</string>
 	<key>CFBundleIdentifier</key>
-	<string>si.intera.hakai</string>
+	<string>si.lipus.hakai</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>

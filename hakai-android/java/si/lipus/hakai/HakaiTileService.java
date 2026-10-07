@@ -1,4 +1,4 @@
-package si.intera.hakai;
+package si.lipus.hakai;
 
 import android.app.NativeActivity;
 import android.app.PendingIntent;

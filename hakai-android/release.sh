@@ -95,7 +95,7 @@ if [ "$INSTALL" = 1 ]; then
     # -r: replace an installed copy — works when it was signed with this same key.
     if ! "$ADB" install -r "$APK"; then
         echo "install failed — if the installed hakai was signed with a different (debug) key," >&2
-        echo "uninstall it once: $ADB uninstall si.intera.hakai" >&2
+        echo "uninstall it once: $ADB uninstall si.lipus.hakai" >&2
         exit 1
     fi
 fi
