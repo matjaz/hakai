@@ -222,51 +222,20 @@ fn create_texture_from_rgba(
 
 // ── HUD elements ─────────────────────────────────────────────────────────────────────────
 
+/// A rasterised HUD text (the tool name, the key hint), drawn as a sprite so it can fade
+/// with the status bar.
 pub struct HudGpu {
     #[allow(dead_code)]
     texture: wgpu::Texture,
-    #[allow(dead_code)]
     view: wgpu::TextureView,
     width: u32,
     height: u32,
     source: String,
-    uniform_buffer: wgpu::Buffer,
-    bind_group: wgpu::BindGroup,
-}
-
-fn create_hud_gpu(
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-    layout: &wgpu::BindGroupLayout,
-    sampler: &wgpu::Sampler,
-    pixmap: &tiny_skia::Pixmap,
-    source: String,
-) -> HudGpu {
-    let (width, height) = (pixmap.width(), pixmap.height());
-    let (texture, view) = create_sprite_texture(device, queue, pixmap);
-    let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("hud-uniform"),
-        size: std::mem::size_of::<TileUniform>() as u64,
-        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        mapped_at_creation: false,
-    });
-    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("hud-bind-group"),
-        layout,
-        entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: uniform_buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&view) },
-            wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(sampler) },
-        ],
-    });
-    HudGpu { texture, view, width, height, source, uniform_buffer, bind_group }
 }
 
 fn create_hud_text(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
-    layout: &wgpu::BindGroupLayout,
-    sampler: &wgpu::Sampler,
     text: &mut TextRenderer,
     s: &str,
     size_px: f32,
@@ -274,15 +243,14 @@ fn create_hud_text(
     color: [u8; 4],
 ) -> Option<HudGpu> {
     let pixmap = text.rasterize(s, size_px, bold, color)?;
-    Some(create_hud_gpu(device, queue, layout, sampler, &pixmap, s.to_string()))
+    let (texture, view) = create_sprite_texture(device, queue, &pixmap);
+    Some(HudGpu { texture, view, width: pixmap.width(), height: pixmap.height(), source: s.to_string() })
 }
 
 #[allow(clippy::too_many_arguments)]
 fn ensure_hud_text(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
-    layout: &wgpu::BindGroupLayout,
-    sampler: &wgpu::Sampler,
     text: &mut TextRenderer,
     cache: &mut Option<HudGpu>,
     s: &str,
@@ -293,27 +261,7 @@ fn ensure_hud_text(
     if cache.as_ref().map(|c| c.source == s).unwrap_or(false) {
         return;
     }
-    *cache = if s.is_empty() {
-        None
-    } else {
-        create_hud_text(device, queue, layout, sampler, text, s, size_px, bold, color)
-    };
-}
-
-fn draw_hud_element(
-    queue: &wgpu::Queue,
-    pass: &mut wgpu::RenderPass<'_>,
-    element: &HudGpu,
-    anchor_px: (f32, f32),
-    anchor: (f32, f32),
-    screen_px: (f32, f32),
-) {
-    let size_px = (element.width as f32, element.height as f32);
-    let origin_px = (anchor_px.0 - anchor.0 * size_px.0, anchor_px.1 - anchor.1 * size_px.1);
-    let ndc = tile_ndc(origin_px, size_px, screen_px);
-    queue.write_buffer(&element.uniform_buffer, 0, bytemuck::bytes_of(&ndc));
-    pass.set_bind_group(0, &element.bind_group, &[]);
-    pass.draw(0..6, 0..1);
+    *cache = if s.is_empty() { None } else { create_hud_text(device, queue, text, s, size_px, bold, color) };
 }
 
 pub struct ToastGpu {
@@ -953,10 +901,10 @@ impl Assets {
         let flash_texture = create_sprite_texture(&device, &queue, sprites.flash());
 
         let hint_color = hud_rgba_arr(hud_colors.foreground, 153);
-        let hud_hint = create_hud_text(&device, &queue, &pipelines.tile_bind_group_layout, &sampler, text, hud_text.status_hint, HUD_HINT_SIZE, false, hint_color);
-        let hud_hint_short = create_hud_text(&device, &queue, &pipelines.tile_bind_group_layout, &sampler, text, hud_text.status_hint_short, HUD_HINT_SIZE, false, hint_color);
+        let hud_hint = create_hud_text(&device, &queue, text, hud_text.status_hint, HUD_HINT_SIZE, false, hint_color);
+        let hud_hint_short = create_hud_text(&device, &queue, text, hud_text.status_hint_short, HUD_HINT_SIZE, false, hint_color);
         let initial_label = format!("{} \u{b7} {}", ToolId::Hammer.key_digit(), ToolId::Hammer.display_name());
-        let hud_label = create_hud_text(&device, &queue, &pipelines.tile_bind_group_layout, &sampler, text, &initial_label, HUD_LABEL_SIZE, false, hud_rgba_arr(hud_colors.foreground, 255));
+        let hud_label = create_hud_text(&device, &queue, text, &initial_label, HUD_LABEL_SIZE, false, hud_rgba_arr(hud_colors.foreground, 255));
 
         let cell_normal_pixmap = build_panel_pixmap(PALETTE_CELL as u32, PALETTE_CELL as u32, hud_rgba(hud_colors.foreground, 18), None);
         let palette_cell_normal = create_sprite_texture(&device, &queue, &cell_normal_pixmap);
@@ -1017,8 +965,6 @@ impl Assets {
         ensure_hud_text(
             &self.device,
             &self.queue,
-            &self.pipelines.tile_bind_group_layout,
-            &self.sampler,
             text,
             &mut self.hud_label,
             &s,
@@ -1205,23 +1151,30 @@ pub fn render(a: &Assets, text: &mut TextRenderer, icons: &mut ToolIcons, show_c
 
         let layout = hud_layout(screen_px);
         let bar_center = (screen_px.0 / 2.0, screen_px.1 - HUD_BAR_BOTTOM_MARGIN);
+        // The status bar fades out when idle (see `Hud::bar_alpha`); its text goes with it.
+        let bar_alpha = gpu.hud.bar_alpha();
         pass.set_pipeline(sprite_pipeline);
-        let bar_view = a.panel_view((layout.bar_width, HUD_BAR_SIZE.1), false);
-        let ndc = rotated_sprite_ndc(bar_center, (layout.bar_width, HUD_BAR_SIZE.1), 0.0, screen_px, 1.0);
-        draw_rotated_sprite(device, &mut pass, sprite_bind_group_layout, sampler, &bar_view, &ndc, "hud-bar");
+        if bar_alpha > 0.0 {
+            let bar_view = a.panel_view((layout.bar_width, HUD_BAR_SIZE.1), false);
+            let ndc = rotated_sprite_ndc(bar_center, (layout.bar_width, HUD_BAR_SIZE.1), 0.0, screen_px, bar_alpha);
+            draw_rotated_sprite(device, &mut pass, sprite_bind_group_layout, sampler, &bar_view, &ndc, "hud-bar");
 
-        pass.set_pipeline(pipeline);
-        let label_width = a.hud_label.as_ref().map_or(0.0, |l| l.width as f32);
-        if let Some(label) = &a.hud_label {
-            let anchor = (bar_center.0 - layout.bar_width / 2.0 + HUD_BAR_PADDING, bar_center.1);
-            draw_hud_element(queue, &mut pass, label, anchor, (0.0, 0.5), screen_px);
-        }
-        // The full hint if it fits beside the tool name, else the short one, else none.
-        let room = layout.bar_width - 2.0 * HUD_BAR_PADDING - label_width - 16.0;
-        let hint = [&a.hud_hint, &a.hud_hint_short].into_iter().flatten().find(|h| h.width as f32 <= room);
-        if let Some(hint) = hint {
-            let anchor = (bar_center.0 + layout.bar_width / 2.0 - HUD_BAR_PADDING, bar_center.1);
-            draw_hud_element(queue, &mut pass, hint, anchor, (1.0, 0.5), screen_px);
+            let label_width = a.hud_label.as_ref().map_or(0.0, |l| l.width as f32);
+            if let Some(label) = &a.hud_label {
+                let (w, h) = (label.width as f32, label.height as f32);
+                let center = (bar_center.0 - layout.bar_width / 2.0 + HUD_BAR_PADDING + w / 2.0, bar_center.1);
+                let ndc = rotated_sprite_ndc(center, (w, h), 0.0, screen_px, bar_alpha);
+                draw_rotated_sprite(device, &mut pass, sprite_bind_group_layout, sampler, &label.view, &ndc, "hud-label");
+            }
+            // The full hint if it fits beside the tool name, else the short one, else none.
+            let room = layout.bar_width - 2.0 * HUD_BAR_PADDING - label_width - 16.0;
+            let hint = [&a.hud_hint, &a.hud_hint_short].into_iter().flatten().find(|h| h.width as f32 <= room);
+            if let Some(hint) = hint {
+                let (w, h) = (hint.width as f32, hint.height as f32);
+                let center = (bar_center.0 + layout.bar_width / 2.0 - HUD_BAR_PADDING - w / 2.0, bar_center.1);
+                let ndc = rotated_sprite_ndc(center, (w, h), 0.0, screen_px, bar_alpha);
+                draw_rotated_sprite(device, &mut pass, sprite_bind_group_layout, sampler, &hint.view, &ndc, "hud-hint");
+            }
         }
 
         if let Some((toast_text, alpha)) = gpu.hud.toast() {

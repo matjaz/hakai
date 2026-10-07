@@ -221,7 +221,15 @@ impl Scene {
 
     // ── Tool switching and global commands (verbatim from the Linux binary) ────────────────
 
+    /// Shows every output's status bar and restarts its idle timer.
+    fn poke_bars(&mut self) {
+        for gpu in &mut self.layers {
+            gpu.hud.poke_bar();
+        }
+    }
+
     pub fn select_tool(&mut self, id: ToolId) {
+        self.poke_bars();
         for gpu in &mut self.layers {
             if gpu.active_tool == id {
                 continue;
@@ -256,6 +264,7 @@ impl Scene {
     }
 
     pub fn erase_all(&mut self) {
+        self.poke_bars();
         for gpu in &mut self.layers {
             if let Some(damage) = gpu.damage.as_mut() {
                 damage.erase_all();
@@ -265,12 +274,14 @@ impl Scene {
     }
 
     pub fn set_palette_visible(&mut self, visible: bool) {
+        self.poke_bars();
         for gpu in &mut self.layers {
             gpu.hud.set_palette_visible(visible);
         }
     }
 
     pub fn toggle_credits(&mut self) {
+        self.poke_bars();
         for gpu in &mut self.layers {
             gpu.hud.toggle_credits();
         }
@@ -286,6 +297,7 @@ impl Scene {
     }
 
     pub fn toggle_mode(&mut self) {
+        self.poke_bars();
         for gpu in &mut self.layers {
             gpu.frozen = !gpu.frozen;
             if !gpu.frozen {
@@ -411,6 +423,8 @@ impl Scene {
         if !gpu.is_down {
             return;
         }
+        // Using a tool counts as activity: the status bar stays up while you smash.
+        gpu.hud.poke_bar();
         let active = gpu.active_tool;
         if let (Some(tool), Some(damage)) = (gpu.tools.get_mut(&active), gpu.damage.as_mut()) {
             let mut ctx = ToolContext {
@@ -430,6 +444,7 @@ impl Scene {
     pub fn pointer_pressed(&mut self, idx: usize, point: (f32, f32)) {
         let Some(gpu) = self.layers.get_mut(idx) else { return };
         gpu.mouse = point;
+        gpu.hud.poke_bar();
 
         let screen = (gpu.width as f32, gpu.height as f32);
         let palette_hit = if gpu.hud.palette_open() {

@@ -48,6 +48,12 @@ const TOAST_FADE: f32 = 0.4;
 
 const CREDITS_FADE: f32 = 0.12;
 
+/// The status bar fades out after this long without anything happening — no tool in use,
+/// no tool switch, no panel — and comes back the moment something does.
+const BAR_IDLE_HIDE: f32 = 5.0;
+const BAR_FADE_IN: f32 = 0.15;
+const BAR_FADE_OUT: f32 = 0.4;
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum CreditsAnim {
     Hidden,
@@ -73,6 +79,11 @@ pub struct Hud {
     /// when the panel is taller than the screen (a phone in landscape); the renderer and
     /// `Scene::scroll_credits` clamp it to the panel's real overflow.
     credits_scroll: f32,
+
+    /// Seconds since the last activity (see [`Hud::poke_bar`]).
+    bar_idle: f32,
+    /// The status bar's current opacity, easing toward 1 while active and 0 once idle.
+    bar_alpha: f32,
 }
 
 impl Hud {
@@ -85,6 +96,8 @@ impl Hud {
             credits_open: false,
             credits_anim: CreditsAnim::Hidden,
             credits_scroll: 0.0,
+            bar_idle: 0.0,
+            bar_alpha: 1.0,
         }
     }
 
@@ -194,6 +207,19 @@ impl Hud {
         }
     }
 
+    // MARK: - Status bar
+
+    /// Something happened — a tool was used or switched, a panel opened — so the status
+    /// bar shows (again) and its idle clock restarts.
+    pub fn poke_bar(&mut self) {
+        self.bar_idle = 0.0;
+    }
+
+    /// The status bar's opacity, 0..1 — a renderer skips it entirely at 0.
+    pub fn bar_alpha(&self) -> f32 {
+        self.bar_alpha
+    }
+
     // MARK: - Per-frame
 
     /// Advances every clock above by `dt`. Call once per frame regardless of visibility —
@@ -227,12 +253,57 @@ impl Hud {
             other => other,
         };
 
+        // The bar stays up while the palette or the credits are open — they're activity too.
+        self.bar_idle += dt;
+        if self.bar_idle < BAR_IDLE_HIDE || self.palette_open || self.credits_open {
+            self.bar_alpha = (self.bar_alpha + dt / BAR_FADE_IN).min(1.0);
+        } else {
+            self.bar_alpha = (self.bar_alpha - dt / BAR_FADE_OUT).max(0.0);
+        }
+
         if self.toast.is_some() {
             self.since_toast += dt;
             if self.since_toast >= TOAST_HOLD + TOAST_FADE {
                 self.toast = None;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod bar_tests {
+    use super::*;
+
+    fn run(hud: &mut Hud, seconds: f32) {
+        for _ in 0..(seconds * 60.0) as usize {
+            hud.advance(1.0 / 60.0);
+        }
+    }
+
+    #[test]
+    fn the_status_bar_fades_out_after_five_idle_seconds() {
+        let mut hud = Hud::new();
+        run(&mut hud, 4.0);
+        assert_eq!(hud.bar_alpha(), 1.0, "still up before the idle timeout");
+        run(&mut hud, 1.5);
+        assert_eq!(hud.bar_alpha(), 0.0, "gone once idle past the timeout plus the fade");
+    }
+
+    #[test]
+    fn activity_brings_the_status_bar_back() {
+        let mut hud = Hud::new();
+        run(&mut hud, 6.0);
+        hud.poke_bar();
+        run(&mut hud, 0.3);
+        assert_eq!(hud.bar_alpha(), 1.0);
+    }
+
+    #[test]
+    fn an_open_palette_keeps_the_status_bar_up() {
+        let mut hud = Hud::new();
+        hud.set_palette_visible(true);
+        run(&mut hud, 8.0);
+        assert_eq!(hud.bar_alpha(), 1.0);
     }
 }
 
