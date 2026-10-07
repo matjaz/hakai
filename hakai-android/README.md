@@ -16,6 +16,8 @@ here. No special permission. It runs in either orientation — held upright, the
 palette folds into rows — and touch replaces the keyboard:
 
 - drag to use the current tool,
+- swipe left/right with **two fingers** anywhere — or with one along the status bar — to
+  switch to the next/previous tool (one finger stays free for drawing),
 - tap the status bar for the tool palette, tap a tool to pick it,
 - long-press the status bar for the credits, tap anywhere to close a panel,
 - Back quits; so does leaving the app.

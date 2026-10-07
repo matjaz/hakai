@@ -154,14 +154,52 @@ const TAP_SLOP: f32 = 10.0;
 /// Points the credits scroll per wheel notch / arrow key.
 const SCROLL_STEP: f32 = 48.0;
 
-/// What the finger currently down is doing. One finger at a time drives everything; the
-/// rest are ignored, like a second mouse would be.
+/// Minimum horizontal travel (points) for a swipe to switch tools, and how much more
+/// horizontal than vertical it has to be.
+const SWIPE_MIN: f32 = 60.0;
+const SWIPE_DOMINANCE: f32 = 1.5;
+
+/// The fingers on the screen and what they're doing together. The first finger drives
+/// everything a single pointer would; a second one turns the gesture into a tool-switching
+/// swipe; further fingers are ignored.
+struct TouchState {
+    /// The layer the gesture started on.
+    idx: usize,
+    role: TouchRole,
+    /// (id, where it went down, where it is now) — the first entry is the primary finger.
+    fingers: Vec<(u64, (f32, f32), (f32, f32))>,
+}
+
+impl TouchState {
+    /// The average displacement of the fingers still down — a two-finger swipe's motion.
+    fn mean_travel(&self) -> (f32, f32) {
+        let n = self.fingers.len().max(1) as f32;
+        let (dx, dy) = self.fingers.iter().fold((0.0, 0.0), |acc, (_, start, now)| {
+            (acc.0 + now.0 - start.0, acc.1 + now.1 - start.1)
+        });
+        (dx / n, dy / n)
+    }
+}
+
+/// `travel` as a tool step: a swipe left is the next tool, right the previous one (like
+/// turning pages) — `None` unless it's long enough and clearly horizontal.
+fn swipe_step(travel: (f32, f32)) -> Option<i32> {
+    let (dx, dy) = travel;
+    (dx.abs() >= SWIPE_MIN && dx.abs() >= SWIPE_DOMINANCE * dy.abs()).then_some(if dx < 0.0 { 1 } else { -1 })
+}
+
+/// What the gesture is doing.
 #[derive(Clone, Copy)]
 enum TouchRole {
     /// Using the active tool — press, drag, release, like the left mouse button.
     Tool,
-    /// Held on the status bar: a tap opens the palette, a long press the credits.
+    /// Held on the status bar: a swipe switches tools, a tap opens the palette, a long
+    /// press the credits.
     Bar(Instant),
+    /// Two fingers down: decided when the first of them lifts — a horizontal swipe
+    /// switches tools, anything else does nothing. Tools never see this gesture, so the
+    /// one-finger drag stays free for drawing.
+    Swipe,
     /// On the open credits panel: a drag scrolls it, a tap closes it. `last_y` is the
     /// finger's previous height, `travel` how far it has moved in total.
     Credits { last_y: f32, travel: f32 },
@@ -220,8 +258,8 @@ struct App<P: Platform> {
     modifiers: ModifiersState,
     /// Last cursor position, in the focused layer's point space.
     cursor: (f32, f32),
-    /// The finger currently down: its id, the layer it's on, and what it's doing.
-    touch: Option<(u64, usize, TouchRole)>,
+    /// The fingers currently down, if any.
+    touch: Option<TouchState>,
     /// Kept alive for the surfaces made from them.
     _gpu: Option<(wgpu::Instance, wgpu::Adapter)>,
 }
@@ -384,7 +422,19 @@ impl<P: Platform> App<P> {
 
         match touch.phase {
             TouchPhase::Started => {
-                if self.touch.is_some() {
+                if let Some(state) = self.touch.as_mut() {
+                    // A second finger on a tool stroke or the status bar: it's a swipe. End
+                    // the stroke where it is, so nothing more gets drawn.
+                    let joins = state.idx == idx
+                        && state.fingers.len() == 1
+                        && matches!(state.role, TouchRole::Tool | TouchRole::Bar(_));
+                    if joins {
+                        if matches!(state.role, TouchRole::Tool) {
+                            scene.pointer_released(idx, self.cursor);
+                        }
+                        state.role = TouchRole::Swipe;
+                        state.fingers.push((touch.id, p, p));
+                    }
                     return;
                 }
                 self.cursor = p;
@@ -406,14 +456,19 @@ impl<P: Platform> App<P> {
                     scene.pointer_pressed(idx, p);
                     TouchRole::Tool
                 };
-                self.touch = Some((touch.id, idx, role));
+                self.touch = Some(TouchState { idx, role, fingers: vec![(touch.id, p, p)] });
             }
             TouchPhase::Moved => {
-                let Some((id, layer, role)) = self.touch.as_mut() else { return };
-                if *id != touch.id || *layer != idx {
+                let Some(state) = self.touch.as_mut() else { return };
+                if state.idx != idx {
                     return;
                 }
-                match role {
+                let Some(finger) = state.fingers.iter().position(|f| f.0 == touch.id) else { return };
+                state.fingers[finger].2 = p;
+                if finger != 0 {
+                    return;
+                }
+                match &mut state.role {
                     TouchRole::Tool => {
                         self.cursor = p;
                         scene.pointer_moved(idx, p);
@@ -429,17 +484,43 @@ impl<P: Platform> App<P> {
                 }
             }
             TouchPhase::Ended | TouchPhase::Cancelled => {
-                let Some((id, layer, role)) = self.touch else { return };
-                if id != touch.id || layer != idx {
+                let Some(state) = self.touch.as_mut() else { return };
+                if state.idx != idx {
                     return;
                 }
-                self.touch = None;
-                match role {
+                let Some(finger) = state.fingers.iter().position(|f| f.0 == touch.id) else { return };
+                state.fingers[finger].2 = p;
+                match state.role {
+                    TouchRole::Swipe => {
+                        // Decided on the first lift; the other finger(s) just get swallowed.
+                        if let Some(step) = swipe_step(state.mean_travel()) {
+                            scene.cycle_tool(step);
+                        }
+                        state.role = TouchRole::Consumed;
+                    }
+                    _ if finger != 0 => {}
                     TouchRole::Tool => scene.pointer_released(idx, p),
-                    TouchRole::Bar(since) if since.elapsed().as_secs_f32() >= LONG_PRESS => scene.toggle_credits(),
-                    TouchRole::Bar(_) => scene.set_palette_visible(true),
+                    TouchRole::Bar(since) => {
+                        let (_, start, _) = state.fingers[0];
+                        if let Some(step) = swipe_step((p.0 - start.0, p.1 - start.1)) {
+                            scene.cycle_tool(step);
+                        } else if since.elapsed().as_secs_f32() >= LONG_PRESS {
+                            scene.toggle_credits();
+                        } else {
+                            scene.set_palette_visible(true);
+                        }
+                    }
                     TouchRole::Credits { travel, .. } if travel < TAP_SLOP => scene.toggle_credits(),
                     TouchRole::Credits { .. } | TouchRole::Consumed => {}
+                }
+                // A primary finger that's done ends its role; the rest of a swipe waits for
+                // every finger to lift.
+                if finger == 0 && !matches!(state.role, TouchRole::Consumed) {
+                    state.role = TouchRole::Consumed;
+                }
+                state.fingers.remove(finger);
+                if state.fingers.is_empty() {
+                    self.touch = None;
                 }
             }
         }
@@ -637,5 +718,34 @@ impl<P: Platform> ApplicationHandler<ShellEvent> for App<P> {
 
             _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_long_horizontal_swipe_steps_through_the_tools() {
+        assert_eq!(swipe_step((-120.0, 10.0)), Some(1), "swiping left is the next tool");
+        assert_eq!(swipe_step((120.0, -10.0)), Some(-1), "swiping right is the previous tool");
+    }
+
+    #[test]
+    fn short_or_diagonal_movement_is_not_a_swipe() {
+        assert_eq!(swipe_step((-30.0, 0.0)), None, "too short");
+        assert_eq!(swipe_step((-80.0, 70.0)), None, "too diagonal");
+        assert_eq!(swipe_step((0.0, -200.0)), None, "vertical");
+    }
+
+    #[test]
+    fn a_two_finger_swipe_is_the_mean_of_both_fingers() {
+        let state = TouchState {
+            idx: 0,
+            role: TouchRole::Swipe,
+            fingers: vec![(1, (300.0, 200.0), (180.0, 210.0)), (2, (300.0, 300.0), (200.0, 300.0))],
+        };
+        assert_eq!(state.mean_travel(), (-110.0, 5.0));
+        assert_eq!(swipe_step(state.mean_travel()), Some(1));
     }
 }

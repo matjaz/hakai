@@ -385,8 +385,8 @@ impl HudText {
         credits_close: "Press C to close \u{b7} scroll for more",
     };
     pub const TOUCH: Self = Self {
-        status_hint: "tap here: tools \u{b7} hold: credits \u{b7} Back: quit",
-        status_hint_short: "tap: tools \u{b7} hold: credits",
+        status_hint: "tap/swipe here: tools \u{b7} hold: credits \u{b7} Back: quit",
+        status_hint_short: "tap/swipe: tools \u{b7} hold: credits",
         credits_close: "Drag to scroll \u{b7} tap to close",
     };
 }
