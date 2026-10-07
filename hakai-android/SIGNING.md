@@ -55,10 +55,23 @@ builds keep using a debug key, which is fine — they aren't released.
 
 ## 4. Build signed locally (optional)
 
+To try a release build on your phone before tagging:
+
 ```sh
-ANDROID_KEYSTORE=~/hakai-release.keystore \
-ANDROID_KEYSTORE_PASSWORD='…' \
-hakai-android/package.sh
+hakai-android/release.sh                   # → hakai-android/target/hakai-<ver>-android-arm64.apk
+hakai-android/release.sh --install         # …and install it on the phone connected over USB
+hakai-android/release.sh --save-password   # once: remember the password in the login Keychain
+```
+
+It finds the JDK, SDK and NDK in their usual places on a Mac, signs with
+`~/hakai-release.keystore` (`--keystore <path>` for another), checks the password before
+building, and prints the signer's fingerprint. The password comes from the Keychain (after
+`--save-password`), else it's asked for — never on the command line.
+
+Underneath it's just:
+
+```sh
+ANDROID_KEYSTORE=~/hakai-release.keystore ANDROID_KEYSTORE_PASSWORD='…' hakai-android/package.sh
 ```
 
 Without `ANDROID_KEYSTORE`, `package.sh` signs with the local debug key
